@@ -26,6 +26,11 @@ constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
 constexpr int MAX_ROBOTS = 1000;
 
+// Number of button sprites
+constexpr int BUTTON_SPRITES = 3;
+// Maximum number of buttons
+constexpr int MAX_BUTTONS = 3;
+
 // Initialise window and renderer
 SDL_Window* window;
 SDL_Renderer* renderer;
@@ -130,10 +135,12 @@ private:
 DTexture robotTexture;
 DTexture tilesTexture;
 DTexture textTexture;
+DTexture buttonTexture;
 
 // Texture clips
-SDL_Rect robotTextureClips[TILE_SPRITES];
+SDL_Rect robotTextureClips[ROBOT_SPRITES];
 SDL_Rect tilesTextureClips[TILE_SPRITES];
+SDL_Rect buttonTextureClips[BUTTON_SPRITES];
 
 // Text
 std::stringstream textObj;
@@ -265,6 +272,117 @@ public:
 private:
 	SDL_FRect hitbox;
 	float battery;
+};
+
+// Button class
+class Button {
+public:
+	Button(int x, int y, int chooseSize, float chooseScale, std::string chooseText = "") { // (x, y) here is the center of the button
+		size = chooseSize;
+		switch (chooseSize) {
+		case 0: // Big button
+			hitbox = { x, y, (int)(1000 * chooseScale), (int)(100 * chooseScale) };
+			break;
+		case 1: // Small button
+			hitbox = { x, y, (int)(500 * chooseScale), (int)(100 * chooseScale) };
+			break;
+		default: // If I made a typo
+			hitbox = { 0, 0, 0, 0 };
+			break;
+		}
+		hitbox.x -= hitbox.w / 2;
+		hitbox.y -= hitbox.h / 2;
+		text = chooseText;
+		hovered = false;
+		pressed = false;
+		shown = false;
+		sprite = 0;
+		scale = chooseScale;
+		disabled = false;
+	}
+	void setShown(int x = -1, int y = -1) {
+		shown = !shown;
+		hovered = false;
+		pressed = false;
+		sprite = 0;
+
+		// Set new location if specified
+		if (shown && x != -1 && y != -1) {
+			hitbox.x = x;
+			hitbox.y = y;
+			hitbox.x -= hitbox.w / 2;
+			hitbox.y -= hitbox.h / 2;
+		}
+	}
+	bool isShown() {
+		return shown;
+	}
+	bool handleEvents(SDL_Event e) {
+		bool buttonEvent = false;
+		if (shown && !disabled && (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP)) {
+			// Get mouse position
+			SDL_Point cursor = { 0, 0 };
+			SDL_GetMouseState(&cursor.x, &cursor.y);
+
+			// Hovering over button
+			if (SDL_PointInRect(&cursor, &hitbox)) hovered = true;
+			else hovered = false;
+
+			if (hovered) {
+				if (!pressed) sprite = 1;
+				switch (e.type) {
+				case SDL_MOUSEBUTTONDOWN:
+					sprite = 2;
+					pressed = true;
+					break;
+				case SDL_MOUSEBUTTONUP:
+					sprite = 1;
+					if (pressed) buttonEvent = true;
+					pressed = false;
+					break;
+				}
+			}
+			else {
+				sprite = 0;
+				pressed = false;
+			}
+		}
+		return buttonEvent;
+	}
+	void render() {
+		SDL_Color buttonColour = { 255, 255, 255, 255 };
+		if (disabled) buttonColour.a = 128;
+		else buttonColour.a = 255;
+
+		// Render button
+		if (shown) {
+			buttonTexture.render((float)hitbox.x, (float)hitbox.y, &buttonTextureClips[sprite + 3 * size], 0, nullptr, SDL_FLIP_NONE, buttonColour);
+
+			if (text != "") {
+				// Load text to get its dimensions
+				textTexture.loadText(text, pixellari);
+
+				// Render button text in the center of the button
+				renderText(text, (float)hitbox.x + (float)hitbox.w / 2 - (float)textTexture.getWidth() / 2, (float)hitbox.y + (float)hitbox.h / 2 - (float)textTexture.getHeight() / (float)2.5, true);
+			}
+		}
+	}
+	void disable() {
+		disabled = true;
+	}
+	void enable() {
+		disabled = false;
+	}
+private:
+	SDL_Rect hitbox;
+	std::string text;
+	int size;
+	bool hovered;
+	bool pressed;
+	bool shown;
+	int sprite;
+	float scale;
+	bool disabled;
 };
 
 // Initialises the SDL library
@@ -405,21 +523,14 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 	return success;
 }
 
-int main(int argc, char** argv) {
-	// Initialise SDL
-	if (!init()) {
-		printf("init() error\n");
-		return false;
-	}
-	if (!loadAllTextures()) {
-		printf("loadAllTextures() error\n");
-		return false;
-	}
-	if (!loadFonts()) {
-		printf("loadFonts() error\n");
-		return false;
-	}
+bool menu() {
+	// Initialise buttons
+	Button* buttons[MAX_BUTTONS] = { nullptr };
 
+	return true;
+}
+
+bool simulation() {
 	// Initialise objects and variables
 	Tile* tiles[MAX_TILES] = { nullptr };
 	Robot* robots[MAX_ROBOTS] = { nullptr };
@@ -432,14 +543,14 @@ int main(int argc, char** argv) {
 	srand((unsigned int)time(0));
 
 	// Initialise tiles based on map
-	if (!setTiles(tiles, "warehouse_resources/test_map.map", 27 * WH, 25 * WH)) {
+	if (!setTiles(tiles, "warehouse_resources/test_map.map", 50 * WH, 50 * WH)) {
 		printf("setTiles() error\n");
 		return false;
 	}
 
 	// Initialise robots
 	for (int i = 0; i < MAX_ROBOTS; i++) {
-
+		robots[i] = new Robot(0, 0);
 	}
 
 	// Main loop
@@ -486,6 +597,32 @@ int main(int argc, char** argv) {
 		// Update the screen
 		SDL_RenderPresent(renderer);
 	}
+	// Deallocate memory
+	close(tiles, robots);
+
+	return true;
+}
+
+int main(int argc, char** argv) {
+	// Initialise SDL
+	if (!init()) {
+		printf("init() error\n");
+		return false;
+	}
+	if (!loadAllTextures()) {
+		printf("loadAllTextures() error\n");
+		return false;
+	}
+	if (!loadFonts()) {
+		printf("loadFonts() error\n");
+		return false;
+	}
+
+	// The warehouse robot simulation
+	simulation();
+
+	// Close SDL library
+	closeSDL();
 
 	return 0;
 }
