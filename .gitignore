@@ -1,5 +1,5 @@
 *.vcxproj
-*.vcxproj.filter
+*.vcxproj.filters
 *.vcxproj.user
 *.sln
 .vs/
