@@ -18,8 +18,8 @@ constexpr int TILE_SPRITES = 4;
 // Maximum number of tiles
 constexpr int MAX_TILES = 10000;
 // Map width
-int MAP_WIDTH = 0;
-int MAP_HEIGHT = 0;
+int MAP_WIDTH = 50 * WH;
+int MAP_HEIGHT = 50 * WH * 4;
 
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
@@ -29,7 +29,7 @@ constexpr int MAX_ROBOTS = 1000;
 // Number of button sprites
 constexpr int BUTTON_SPRITES = 3;
 // Maximum number of buttons
-constexpr int MAX_BUTTONS = 3;
+constexpr int MAX_BUTTONS = 10;
 
 // Initialise window and renderer
 SDL_Window* window;
@@ -37,8 +37,9 @@ SDL_Renderer* renderer;
 
 // Fonts
 TTF_Font* pixellari = nullptr;
+TTF_Font* pixellari_title = nullptr;
 // Font size
-constexpr int FONT_SIZE = 10;
+constexpr int FONT_SIZE = 30;
 
 // Texture wrapper class
 class DTexture {
@@ -150,11 +151,24 @@ void renderText(std::string text, float x, float y, bool shadow = false, SDL_Col
 	// Render text shadow if required
 	if (shadow) {
 		textTexture.loadText(text, pixellari, { 0, 0, 0, 255 });
-		textTexture.render(x + (float)FONT_SIZE / 8, y + (float)FONT_SIZE / 8);
+		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16);
 	}
 
 	// Load and render text
 	textTexture.loadText(text, pixellari, textColor);
+	textTexture.render(x, y);
+}
+
+// Function to render titles
+void renderTitle(std::string text, float x, float y, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
+	// Render text shadow if required
+	if (shadow) {
+		textTexture.loadText(text, pixellari_title, { 0, 0, 0, 255 });
+		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16);
+	}
+
+	// Load and render text
+	textTexture.loadText(text, pixellari_title, textColor);
 	textTexture.render(x, y);
 }
 
@@ -277,42 +291,22 @@ private:
 // Button class
 class Button {
 public:
-	Button(int x, int y, int chooseSize, float chooseScale, std::string chooseText = "") { // (x, y) here is the center of the button
-		size = chooseSize;
-		switch (chooseSize) {
-		case 0: // Big button
-			hitbox = { x, y, (int)(1000 * chooseScale), (int)(100 * chooseScale) };
-			break;
-		case 1: // Small button
-			hitbox = { x, y, (int)(500 * chooseScale), (int)(100 * chooseScale) };
-			break;
-		default: // If I made a typo
-			hitbox = { 0, 0, 0, 0 };
-			break;
-		}
+	Button(int x, int y, std::string chooseText = "") { // (x, y) here is the center of the button
+		hitbox = { x, y, (int)(375 * SCREEN_SCALE), (int)(50 * SCREEN_SCALE) };
 		hitbox.x -= hitbox.w / 2;
 		hitbox.y -= hitbox.h / 2;
 		text = chooseText;
 		hovered = false;
 		pressed = false;
-		shown = false;
+		shown = true;
 		sprite = 0;
-		scale = chooseScale;
 		disabled = false;
 	}
-	void setShown(int x = -1, int y = -1) {
+	void setShown() {
 		shown = !shown;
 		hovered = false;
 		pressed = false;
 		sprite = 0;
-
-		// Set new location if specified
-		if (shown && x != -1 && y != -1) {
-			hitbox.x = x;
-			hitbox.y = y;
-			hitbox.x -= hitbox.w / 2;
-			hitbox.y -= hitbox.h / 2;
-		}
 	}
 	bool isShown() {
 		return shown;
@@ -356,7 +350,7 @@ public:
 
 		// Render button
 		if (shown) {
-			buttonTexture.render((float)hitbox.x, (float)hitbox.y, &buttonTextureClips[sprite + 3 * size], 0, nullptr, SDL_FLIP_NONE, buttonColour);
+			buttonTexture.render((float)hitbox.x, (float)hitbox.y, &buttonTextureClips[sprite], 0, nullptr, SDL_FLIP_NONE, buttonColour);
 
 			if (text != "") {
 				// Load text to get its dimensions
@@ -376,12 +370,10 @@ public:
 private:
 	SDL_Rect hitbox;
 	std::string text;
-	int size;
 	bool hovered;
 	bool pressed;
 	bool shown;
 	int sprite;
-	float scale;
 	bool disabled;
 };
 
@@ -422,36 +414,22 @@ bool loadAllTextures() {
 	bool success = true;
 	if (!tilesTexture.loadTexture("warehouse_resources/tiles.png", tilesTextureClips, TILE_SPRITES, WH)) success = false;
 	if (!robotTexture.loadTexture("warehouse_resources/robot.png", robotTextureClips, ROBOT_SPRITES, WH)) success = false;
+	if (!buttonTexture.loadTexture("warehouse_resources/button.png", buttonTextureClips, BUTTON_SPRITES, 375)) success = false;
 	return success;
 }
 
 // Loads fonts
 bool loadFonts() {
 	bool success = true;
-	if (!(pixellari = TTF_OpenFont("warehouse_resources/Pixellari.ttf", 10 * (int)SCREEN_SCALE))) {
+	if (!(pixellari = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE))) {
+		printf("TTF_OpenFont error for Pixellari");
+		success = false;
+	}
+	if (!(pixellari_title = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE * 2))) {
 		printf("TTF_OpenFont error for Pixellari");
 		success = false;
 	}
 	return success;
-}
-
-// Deletes objects
-void close(Tile* tiles[], Robot* robots[]) {
-	// Delete tiles
-	for (int i = 0; i < MAX_TILES; i++) {
-		if (tiles[i] != nullptr) {
-			delete tiles[i];
-			tiles[i] = nullptr;
-		}
-	}
-
-	// Delete robots
-	for (int i = 0; i < MAX_ROBOTS; i++) {
-		if (robots[i] != nullptr) {
-			delete robots[i];
-			robots[i] = nullptr;
-		}
-	}
 }
 
 // Closes the SDL library
@@ -459,6 +437,8 @@ void closeSDL() {
 	// Free textures
 	tilesTexture.freeTexture();
 	robotTexture.freeTexture();
+	textTexture.freeTexture();
+	buttonTexture.freeTexture();
 
 	// Deallocate font
 	pixellari = nullptr;
@@ -523,84 +503,173 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 	return success;
 }
 
-bool menu() {
-	// Initialise buttons
-	Button* buttons[MAX_BUTTONS] = { nullptr };
+// Just a function declaration
+void simulation();
 
-	return true;
-}
-
-bool simulation() {
-	// Initialise objects and variables
-	Tile* tiles[MAX_TILES] = { nullptr };
-	Robot* robots[MAX_ROBOTS] = { nullptr };
-
-	SDL_FRect camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
-	float camSpd = 10;
+void menu() {
+	// Initialise variables
 	SDL_Event e;
 
-	// Random seed
-	srand((unsigned int)time(0));
-
-	// Initialise tiles based on map
-	if (!setTiles(tiles, "warehouse_resources/test_map.map", 50 * WH, 50 * WH)) {
-		printf("setTiles() error\n");
-		return false;
-	}
-
-	// Initialise robots
-	for (int i = 0; i < MAX_ROBOTS; i++) {
-		robots[i] = new Robot(0, 0);
-	}
+	// Initialise buttons
+	Button* buttons[MAX_BUTTONS] = { nullptr };
+	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 75, "Settings");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 75, "Quit");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 75, "Back");
+	buttons[3]->setShown();
 
 	// Main loop
 	bool quit = false;
+	bool startSimulation = false;
+	bool changeSettings = false;
 	while (!quit) {
 		// Handle events
 		while (SDL_PollEvent(&e) != 0) {
 			// The close button
 			if (e.type == SDL_QUIT) quit = true;
-
-			// Move camera using arrow keys
-			const Uint8* keyStates = SDL_GetKeyboardState(nullptr);
-			if (keyStates[SDL_SCANCODE_UP]) camera.y -= camSpd;
-			if (keyStates[SDL_SCANCODE_DOWN]) camera.y += camSpd;
-			if (keyStates[SDL_SCANCODE_LEFT]) camera.x -= camSpd;
-			if (keyStates[SDL_SCANCODE_RIGHT]) camera.x += camSpd;
-		}
-
-		// Process robots
-		for (int i = 0; i < MAX_ROBOTS; i++) {
-			if (robots[i] != nullptr) {
-				robots[i]->handleDecisions();
+			
+			// Start button
+			if (buttons[0]->isShown() && buttons[0]->handleEvents(e)) {
+				quit = true;
+				startSimulation = true;
 			}
+
+			// Settings button and Back button
+			if (buttons[1]->isShown() && buttons[1]->handleEvents(e) || buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
+				changeSettings = !changeSettings;
+				for (int i = 0; i < 4; i++) buttons[i]->setShown();
+			}
+
+			// Quit button
+			if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) quit = true;
 		}
 
 		// Reset screen
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 		SDL_RenderClear(renderer);
 
-		// Render tiles
-		for (int i = 0; i < MAX_TILES; i++) {
-			if (tiles[i] != nullptr) {
-				tiles[i]->render(camera);
-			}
-		}
+		
+		// Render title
+		if (!changeSettings) renderTitle("Warehouse Robot Simulation", 275, 150);
+		else renderTitle("Settings", 540, 150);
 
-		// Render robots
-		for (int i = 0; i < MAX_ROBOTS; i++) {
-			if (robots[i] != nullptr) {
-				robots[i]->render(camera);
+		// Render buttons
+		for (int i = 0; i < MAX_BUTTONS; i++) {
+			if (buttons[i] != nullptr) {
+				buttons[i]->render();
 			}
 		}
 
 		// Update the screen
 		SDL_RenderPresent(renderer);
 	}
-	// Deallocate memory
-	close(tiles, robots);
+	// Delete buttons
+	for (int i = 0; i < MAX_BUTTONS; i++) {
+		if (buttons[i] != nullptr) {
+			delete buttons[i];
+			buttons[i] = nullptr;
+		}
+	}
 
-	return true;
+	if (startSimulation) simulation();
+}
+
+void simulation() {
+	// Initialise variables
+	SDL_FRect camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
+	float camSpd = 10;
+	SDL_Event e;
+
+	// Initialise objects
+	Tile* tiles[MAX_TILES] = { nullptr };
+	Robot* robots[MAX_ROBOTS] = { nullptr };
+	Button* buttons[MAX_BUTTONS] = { nullptr };
+
+	// Random seed
+	srand((unsigned int)time(0));
+
+	// Create tiles based on map
+	if (!setTiles(tiles, "warehouse_resources/test_map.map", 50 * WH, 50 * WH)) printf("setTiles() error\n");
+	else {
+		// Create robots
+		for (int i = 0; i < MAX_ROBOTS; i++) {
+			robots[i] = new Robot(0, 0);
+		}
+
+		// Main loop
+		bool quit = false;
+		bool pause = false;
+		while (!quit) {
+			// Handle events
+			while (SDL_PollEvent(&e) != 0) {
+				// The close button
+				if (e.type == SDL_QUIT) quit = true;
+
+				// Pause by pressing ESC
+				else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 && e.key.keysym.sym == SDLK_ESCAPE) pause = !pause;
+
+				// Move camera using arrow keys
+				const Uint8* keyStates = SDL_GetKeyboardState(nullptr);
+				if (keyStates[SDL_SCANCODE_UP]) camera.y -= camSpd;
+				if (keyStates[SDL_SCANCODE_DOWN]) camera.y += camSpd;
+				if (keyStates[SDL_SCANCODE_LEFT]) camera.x -= camSpd;
+				if (keyStates[SDL_SCANCODE_RIGHT]) camera.x += camSpd;
+			}
+
+			if (!pause) {
+				// Process robots
+				for (int i = 0; i < MAX_ROBOTS; i++) {
+					if (robots[i] != nullptr) {
+						robots[i]->handleDecisions();
+					}
+				}
+			}
+
+			// Reset screen
+			SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
+			SDL_RenderClear(renderer);
+
+			// Render tiles
+			for (int i = 0; i < MAX_TILES; i++) {
+				if (tiles[i] != nullptr) {
+					tiles[i]->render(camera);
+				}
+			}
+
+			// Render robots
+			for (int i = 0; i < MAX_ROBOTS; i++) {
+				if (robots[i] != nullptr) {
+					robots[i]->render(camera);
+				}
+			}
+
+			// Update the screen
+			SDL_RenderPresent(renderer);
+		}
+	}
+	// Delete tiles
+	for (int i = 0; i < MAX_TILES; i++) {
+		if (tiles[i] != nullptr) {
+			delete tiles[i];
+			tiles[i] = nullptr;
+		}
+	}
+
+	// Delete robots
+	for (int i = 0; i < MAX_ROBOTS; i++) {
+		if (robots[i] != nullptr) {
+			delete robots[i];
+			robots[i] = nullptr;
+		}
+	}
+
+	// Delete buttons
+	for (int i = 0; i < MAX_BUTTONS; i++) {
+		if (buttons[i] != nullptr) {
+			delete buttons[i];
+			buttons[i] = nullptr;
+		}
+	}
 }
 
 int main(int argc, char** argv) {
@@ -619,7 +688,7 @@ int main(int argc, char** argv) {
 	}
 
 	// The warehouse robot simulation
-	simulation();
+	menu();
 
 	// Close SDL library
 	closeSDL();
