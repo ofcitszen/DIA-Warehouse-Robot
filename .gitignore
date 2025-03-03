@@ -1,0 +1,7 @@
+*.vcxproj
+*.vcxproj.filter
+*.vcxproj.user
+*.sln
+.vs/
+x64/
+DIA SDL CW1/
