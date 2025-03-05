@@ -9,7 +9,7 @@
 // Screen sizes
 constexpr int SCREEN_WIDTH = 1280;
 constexpr int SCREEN_HEIGHT = 720;
-float SCREEN_SCALE = 1;
+float SCREEN_SCALE = 3;
 
 // Tile width and height
 constexpr int WH = 16;
@@ -101,14 +101,14 @@ public:
 		SDL_FreeSurface(loadedSurface);
 		return true;
 	}
-	void render(float x, float y, SDL_Rect* clip = nullptr, double angle = 0.0, SDL_FPoint* center = nullptr, SDL_RendererFlip flip = SDL_FLIP_NONE, SDL_Color maskColor = { 255, 255, 255, 255 }) {
+	void render(float x, float y, SDL_Rect* clip = nullptr, float scale = SCREEN_SCALE, double angle = 0.0, SDL_FPoint* center = nullptr, SDL_RendererFlip flip = SDL_FLIP_NONE, SDL_Color maskColor = { 255, 255, 255, 255 }) {
 		// Screen scaling
-		SDL_FRect dest = { x * SCREEN_SCALE, y * SCREEN_SCALE , (float)mWidth * SCREEN_SCALE, (float)mHeight * SCREEN_SCALE };
+		SDL_FRect dest = { x * scale, y * scale , (float)mWidth * scale, (float)mHeight * scale };
 
 		// Clipping
 		if (clip != nullptr) {
-			dest.w = clip->w * SCREEN_SCALE;
-			dest.h = clip->h * SCREEN_SCALE;
+			dest.w = clip->w * scale;
+			dest.h = clip->h * scale;
 		}
 
 		// Colour modulation
@@ -151,12 +151,12 @@ void renderText(std::string text, float x, float y, bool shadow = false, SDL_Col
 	// Render text shadow if required
 	if (shadow) {
 		textTexture.loadText(text, pixellari, { 0, 0, 0, 255 });
-		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16);
+		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16, nullptr, 1);
 	}
 
 	// Load and render text
 	textTexture.loadText(text, pixellari, textColor);
-	textTexture.render(x, y);
+	textTexture.render(x, y, nullptr, 1);
 }
 
 // Function to render titles
@@ -164,21 +164,20 @@ void renderTitle(std::string text, float x, float y, bool shadow = false, SDL_Co
 	// Render text shadow if required
 	if (shadow) {
 		textTexture.loadText(text, pixellari_title, { 0, 0, 0, 255 });
-		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16);
+		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16, nullptr, 1);
 	}
 
 	// Load and render text
 	textTexture.loadText(text, pixellari_title, textColor);
-	textTexture.render(x, y);
+	textTexture.render(x, y, nullptr, 1);
 }
 
 // Tile class
 class Tile {
 public:
-	Tile(float x, float y, int setType, int setSide = -1) {
+	Tile(float x, float y, int setType) {
 		hitbox = { x, y, WH, WH };
 		type = setType;
-		side = setSide;
 	}
 	void render(SDL_FRect& camera) {
 		if (SDL_HasIntersectionF(&hitbox, &camera)) tilesTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &tilesTextureClips[type]);
@@ -198,7 +197,6 @@ public:
 private:
 	SDL_FRect hitbox;
 	int type;
-	int side; // Shelf side to retrieve item from
 };
 
 // Robot class
@@ -207,12 +205,13 @@ public:
 	Robot(float x, float y) {
 		hitbox = { x, y, WH, WH };
 		battery = 100;
+		sprite = 3;
 	}
 	SDL_FRect getBox() {
 		return hitbox;
 	}
 	void render(SDL_FRect& camera) {
-		if (SDL_HasIntersectionF(&hitbox, &camera)) robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y);
+		if (SDL_HasIntersectionF(&hitbox, &camera)) robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite]);
 	}
 	// Returns the type of tile that the robot is standing on
 	int getTileType(Tile* tiles[]) {
@@ -272,6 +271,13 @@ public:
 			case 3: hitbox.x -= WH; break;
 			}
 		}
+		// decrement battery
+		else {
+			battery -= 0.2;
+			if (battery == 0) sprite = 0;
+			else if (battery < 20) sprite = 1;
+			else if (battery < 50) sprite = 2;
+		}
 		
 		// Returns true if moved successfully
 		return success;
@@ -286,13 +292,14 @@ public:
 private:
 	SDL_FRect hitbox;
 	float battery;
+	int sprite;
 };
 
 // Button class
 class Button {
 public:
 	Button(int x, int y, std::string chooseText = "") { // (x, y) here is the center of the button
-		hitbox = { x, y, (int)(375 * SCREEN_SCALE), (int)(50 * SCREEN_SCALE) };
+		hitbox = { x, y, 375, 50 };
 		hitbox.x -= hitbox.w / 2;
 		hitbox.y -= hitbox.h / 2;
 		text = chooseText;
@@ -350,7 +357,7 @@ public:
 
 		// Render button
 		if (shown) {
-			buttonTexture.render((float)hitbox.x, (float)hitbox.y, &buttonTextureClips[sprite], 0, nullptr, SDL_FLIP_NONE, buttonColour);
+			buttonTexture.render((float)hitbox.x, (float)hitbox.y, &buttonTextureClips[sprite], 1, 0, nullptr, SDL_FLIP_NONE, buttonColour);
 
 			if (text != "") {
 				// Load text to get its dimensions
@@ -506,6 +513,10 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 // Just a function declaration
 void simulation();
 
+void results() {
+
+}
+
 void menu() {
 	// Initialise variables
 	SDL_Event e;
@@ -547,7 +558,6 @@ void menu() {
 		// Reset screen
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 		SDL_RenderClear(renderer);
-
 		
 		// Render title
 		if (!changeSettings) renderTitle("Warehouse Robot Simulation", 275, 150);
@@ -578,15 +588,27 @@ void simulation() {
 	// Initialise variables
 	SDL_FRect camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
 	float camSpd = 10;
+	float camVelX = 0;
+	float camVelY = 0;
 	SDL_Event e;
+	//SCREEN_SCALE = 3;
 
 	// Initialise objects
 	Tile* tiles[MAX_TILES] = { nullptr };
 	Robot* robots[MAX_ROBOTS] = { nullptr };
 	Button* buttons[MAX_BUTTONS] = { nullptr };
+	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Resume");
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 75, "Menu");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 75, "Finish");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 75, "Quit");
+	for (int i = 0; i < 4; i++) buttons[i]->setShown();
 
 	// Random seed
 	srand((unsigned int)time(0));
+
+	// Event flag
+	bool returnMenu = false;
+	bool finishSimulation = false;
 
 	// Create tiles based on map
 	if (!setTiles(tiles, "warehouse_resources/test_map.map", 50 * WH, 50 * WH)) printf("setTiles() error\n");
@@ -605,15 +627,59 @@ void simulation() {
 				// The close button
 				if (e.type == SDL_QUIT) quit = true;
 
-				// Pause by pressing ESC
-				else if (e.type == SDL_KEYDOWN && e.key.repeat == 0 && e.key.keysym.sym == SDLK_ESCAPE) pause = !pause;
+				else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
+					switch (e.key.keysym.sym) {
+					// Pause by pressing ESC
+					case SDLK_ESCAPE: 
+						pause = !pause;
+						for (int i = 0; i < 4; i++) buttons[i]->setShown();
+						break;
+					// Move camera using arrow keys
+					case SDLK_UP: camVelY -= camSpd; break;
+					case SDLK_DOWN: camVelY += camSpd; break;
+					case SDLK_LEFT: camVelX -= camSpd; break;
+					case SDLK_RIGHT: camVelX += camSpd; break;
+					// Zoom
+					case SDLK_w: if (SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5; break;
+					case SDLK_e: if (SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5; break;
+					case SDLK_r: SCREEN_SCALE = 3; break;
+					}
+				}
 
-				// Move camera using arrow keys
+				else if (e.type == SDL_KEYUP && e.key.repeat == 0) {
+					switch (e.key.keysym.sym) {
+					case SDLK_UP: camVelY += camSpd; break;
+					case SDLK_DOWN: camVelY -= camSpd; break;
+					case SDLK_LEFT: camVelX += camSpd; break;
+					case SDLK_RIGHT: camVelX -= camSpd; break;
+					}
+				}
+
+				// Zoom
 				const Uint8* keyStates = SDL_GetKeyboardState(nullptr);
-				if (keyStates[SDL_SCANCODE_UP]) camera.y -= camSpd;
-				if (keyStates[SDL_SCANCODE_DOWN]) camera.y += camSpd;
-				if (keyStates[SDL_SCANCODE_LEFT]) camera.x -= camSpd;
-				if (keyStates[SDL_SCANCODE_RIGHT]) camera.x += camSpd;
+				if (keyStates[SDL_SCANCODE_Q] && SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5;
+				if (keyStates[SDL_SCANCODE_W] && SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5;
+
+				// Resume button
+				if (buttons[0]->isShown() && buttons[0]->handleEvents(e)) {
+					pause = !pause;
+					for (int i = 0; i < 4; i++) buttons[i]->setShown();
+				}
+
+				// Menu button
+				if (buttons[1]->isShown() && buttons[1]->handleEvents(e)) {
+					quit = true;
+					returnMenu = true;
+				}
+
+				// Finish button
+				if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) {
+					quit = true;
+					finishSimulation = true;
+				}
+
+				// Quit button
+				if (buttons[3]->isShown() && buttons[3]->handleEvents(e)) quit = true;
 			}
 
 			if (!pause) {
@@ -623,6 +689,10 @@ void simulation() {
 						robots[i]->handleDecisions();
 					}
 				}
+
+				// Process camera movement
+				camera.x += camVelX;
+				camera.y += camVelY;
 			}
 
 			// Reset screen
@@ -642,6 +712,16 @@ void simulation() {
 					robots[i]->render(camera);
 				}
 			}
+
+			// Render buttons
+			for (int i = 0; i < MAX_BUTTONS; i++) {
+				if (buttons[i] != nullptr) {
+					buttons[i]->render();
+				}
+			}
+
+			// Render "Paused"
+			if (pause) renderTitle("Paused", 540, 150, true);
 
 			// Update the screen
 			SDL_RenderPresent(renderer);
@@ -670,6 +750,9 @@ void simulation() {
 			buttons[i] = nullptr;
 		}
 	}
+
+	if (returnMenu) menu();
+	if (finishSimulation) results();
 }
 
 int main(int argc, char** argv) {
