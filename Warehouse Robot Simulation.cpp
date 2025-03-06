@@ -6,9 +6,11 @@
 #include <sstream>
 #include <string>
 
+#define SDL_HINT_WINDOWS_DPI_AWARENESS "unaware"
+
 // Screen sizes
-constexpr int SCREEN_WIDTH = 1280;
-constexpr int SCREEN_HEIGHT = 720;
+int SCREEN_WIDTH = 1280;
+int SCREEN_HEIGHT = 720;
 float SCREEN_SCALE = 3;
 
 // Tile width and height
@@ -37,6 +39,7 @@ SDL_Renderer* renderer;
 
 // Fonts
 TTF_Font* pixellari = nullptr;
+TTF_Font* pixellari_medium = nullptr;
 TTF_Font* pixellari_title = nullptr;
 // Font size
 constexpr int FONT_SIZE = 30;
@@ -147,20 +150,32 @@ SDL_Rect buttonTextureClips[BUTTON_SPRITES];
 std::stringstream textObj;
 
 // Function to render text
-void renderText(std::string text, float x, float y, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
+void renderText(std::string text, float x, float y, bool center = false, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
+	if (center) {
+		textTexture.loadText(text, pixellari_medium);
+		x -= (float)textTexture.getWidth() / 2;
+		y -= (float)textTexture.getHeight() / (float)2.5;
+	}
+
 	// Render text shadow if required
 	if (shadow) {
-		textTexture.loadText(text, pixellari, { 0, 0, 0, 255 });
+		textTexture.loadText(text, pixellari_medium, { 0, 0, 0, 255 });
 		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16, nullptr, 1);
 	}
 
 	// Load and render text
-	textTexture.loadText(text, pixellari, textColor);
+	textTexture.loadText(text, pixellari_medium, textColor);
 	textTexture.render(x, y, nullptr, 1);
 }
 
 // Function to render titles
-void renderTitle(std::string text, float x, float y, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
+void renderTitle(std::string text, float x, float y, bool center = false, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
+	if (center) {
+		textTexture.loadText(text, pixellari_title);
+		x -= (float)textTexture.getWidth() / 2;
+		y -= (float)textTexture.getHeight() / (float)2.5;
+	}
+	
 	// Render text shadow if required
 	if (shadow) {
 		textTexture.loadText(text, pixellari_title, { 0, 0, 0, 255 });
@@ -299,7 +314,7 @@ private:
 class Button {
 public:
 	Button(int x, int y, std::string chooseText = "") { // (x, y) here is the center of the button
-		hitbox = { x, y, 375, 50 };
+		hitbox = { x, y, 750, 100 };
 		hitbox.x -= hitbox.w / 2;
 		hitbox.y -= hitbox.h / 2;
 		text = chooseText;
@@ -361,10 +376,10 @@ public:
 
 			if (text != "") {
 				// Load text to get its dimensions
-				textTexture.loadText(text, pixellari);
+				textTexture.loadText(text, pixellari_medium);
 
 				// Render button text in the center of the button
-				renderText(text, (float)hitbox.x + (float)hitbox.w / 2 - (float)textTexture.getWidth() / 2, (float)hitbox.y + (float)hitbox.h / 2 - (float)textTexture.getHeight() / (float)2.5, true);
+				renderText(text, (float)hitbox.x + (float)hitbox.w / 2, (float)hitbox.y + (float)hitbox.h / 2, true, true);
 			}
 		}
 	}
@@ -395,6 +410,10 @@ bool init() {
 		printf("SDL_SetHint() error: %s\n", SDL_GetError());
 		success = false;
 	}
+	SDL_DisplayMode mode;
+	SDL_GetDisplayMode(0, 0, &mode);
+	SCREEN_WIDTH = mode.w;
+	SCREEN_HEIGHT = mode.h;
 	if (!(window = SDL_CreateWindow("Knight", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN))) {
 		printf("SDL_CreateWindow() error: %s\n", SDL_GetError());
 		return false;
@@ -421,7 +440,7 @@ bool loadAllTextures() {
 	bool success = true;
 	if (!tilesTexture.loadTexture("warehouse_resources/tiles.png", tilesTextureClips, TILE_SPRITES, WH)) success = false;
 	if (!robotTexture.loadTexture("warehouse_resources/robot.png", robotTextureClips, ROBOT_SPRITES, WH)) success = false;
-	if (!buttonTexture.loadTexture("warehouse_resources/button.png", buttonTextureClips, BUTTON_SPRITES, 375)) success = false;
+	if (!buttonTexture.loadTexture("warehouse_resources/button.png", buttonTextureClips, BUTTON_SPRITES, 750)) success = false;
 	return success;
 }
 
@@ -432,7 +451,11 @@ bool loadFonts() {
 		printf("TTF_OpenFont error for Pixellari");
 		success = false;
 	}
-	if (!(pixellari_title = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE * 2))) {
+	if (!(pixellari_medium = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE * 1.5))) {
+		printf("TTF_OpenFont error for Pixellari");
+		success = false;
+	}
+	if (!(pixellari_title = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE * 2.5))) {
 		printf("TTF_OpenFont error for Pixellari");
 		success = false;
 	}
@@ -524,9 +547,9 @@ void menu() {
 	// Initialise buttons
 	Button* buttons[MAX_BUTTONS] = { nullptr };
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 75, "Settings");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 75, "Quit");
-	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 75, "Back");
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Settings");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Back");
 	buttons[3]->setShown();
 
 	// Main loop
@@ -560,8 +583,8 @@ void menu() {
 		SDL_RenderClear(renderer);
 		
 		// Render title
-		if (!changeSettings) renderTitle("Warehouse Robot Simulation", 275, 150);
-		else renderTitle("Settings", 540, 150);
+		if (!changeSettings) renderTitle("Warehouse Robot Simulation", SCREEN_WIDTH / 2, 300, true);
+		else renderTitle("Settings", SCREEN_WIDTH / 2, 150, true);
 
 		// Render buttons
 		for (int i = 0; i < MAX_BUTTONS; i++) {
@@ -591,16 +614,15 @@ void simulation() {
 	float camVelX = 0;
 	float camVelY = 0;
 	SDL_Event e;
-	//SCREEN_SCALE = 3;
 
 	// Initialise objects
 	Tile* tiles[MAX_TILES] = { nullptr };
 	Robot* robots[MAX_ROBOTS] = { nullptr };
 	Button* buttons[MAX_BUTTONS] = { nullptr };
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Resume");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 75, "Menu");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 75, "Finish");
-	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 75, "Quit");
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Menu");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Finish");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
 	for (int i = 0; i < 4; i++) buttons[i]->setShown();
 
 	// Random seed
@@ -655,11 +677,6 @@ void simulation() {
 					}
 				}
 
-				// Zoom
-				const Uint8* keyStates = SDL_GetKeyboardState(nullptr);
-				if (keyStates[SDL_SCANCODE_Q] && SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5;
-				if (keyStates[SDL_SCANCODE_W] && SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5;
-
 				// Resume button
 				if (buttons[0]->isShown() && buttons[0]->handleEvents(e)) {
 					pause = !pause;
@@ -693,6 +710,8 @@ void simulation() {
 				// Process camera movement
 				camera.x += camVelX;
 				camera.y += camVelY;
+				camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
+				camera.h = (float)SCREEN_HEIGHT/ SCREEN_SCALE;
 			}
 
 			// Reset screen
@@ -721,7 +740,7 @@ void simulation() {
 			}
 
 			// Render "Paused"
-			if (pause) renderTitle("Paused", 540, 150, true);
+			if (pause) renderTitle("Paused", SCREEN_WIDTH / 2, 150, true, true);
 
 			// Update the screen
 			SDL_RenderPresent(renderer);
