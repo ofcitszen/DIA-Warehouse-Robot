@@ -6,8 +6,6 @@
 #include <sstream>
 #include <string>
 
-#define SDL_HINT_WINDOWS_DPI_AWARENESS "unaware"
-
 // Screen sizes
 int SCREEN_WIDTH = 1280;
 int SCREEN_HEIGHT = 720;
@@ -26,7 +24,7 @@ int MAP_HEIGHT = 50 * WH * 4;
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
-constexpr int MAX_ROBOTS = 1000;
+constexpr int MAX_ROBOTS = 10;
 
 // Number of button sprites
 constexpr int BUTTON_SPRITES = 3;
@@ -140,17 +138,38 @@ DTexture robotTexture;
 DTexture tilesTexture;
 DTexture textTexture;
 DTexture buttonTexture;
+DTexture blackScreenTexture;
 
 // Texture clips
 SDL_Rect robotTextureClips[ROBOT_SPRITES];
 SDL_Rect tilesTextureClips[TILE_SPRITES];
 SDL_Rect buttonTextureClips[BUTTON_SPRITES];
+SDL_Rect blackScreenTextureClip = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
 
 // Text
 std::stringstream textObj;
 
-// Function to render text
+// Function to render small text
 void renderText(std::string text, float x, float y, bool center = false, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
+	if (center) {
+		textTexture.loadText(text, pixellari);
+		x -= (float)textTexture.getWidth() / 2;
+		y -= (float)textTexture.getHeight() / (float)2.5;
+	}
+
+	// Render text shadow if required
+	if (shadow) {
+		textTexture.loadText(text, pixellari, { 0, 0, 0, 255 });
+		textTexture.render(x + (float)FONT_SIZE / 16, y + (float)FONT_SIZE / 16, nullptr, 1);
+	}
+
+	// Load and render text
+	textTexture.loadText(text, pixellari, textColor);
+	textTexture.render(x, y, nullptr, 1);
+}
+
+// Function to render medium text
+void renderTextMedium(std::string text, float x, float y, bool center = false, bool shadow = false, SDL_Color textColor = { 255, 255, 255, 255 }) {
 	if (center) {
 		textTexture.loadText(text, pixellari_medium);
 		x -= (float)textTexture.getWidth() / 2;
@@ -195,7 +214,9 @@ public:
 		type = setType;
 	}
 	void render(SDL_FRect& camera) {
-		if (SDL_HasIntersectionF(&hitbox, &camera)) tilesTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &tilesTextureClips[type]);
+		if (type != 0) {
+			if (SDL_HasIntersectionF(&hitbox, &camera)) tilesTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &tilesTextureClips[type - 1]);
+		}
 	}
 	SDL_FRect getBox() {
 		return hitbox;
@@ -217,30 +238,38 @@ private:
 // Robot class
 class Robot {
 public:
-	Robot(float x, float y) {
+	Robot(float x, float y, int direction) {
 		hitbox = { x, y, WH, WH };
 		battery = 100;
 		sprite = 3;
+		dir = direction;
 	}
 	SDL_FRect getBox() {
 		return hitbox;
 	}
 	void render(SDL_FRect& camera) {
-		if (SDL_HasIntersectionF(&hitbox, &camera)) robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite]);
+		if (SDL_HasIntersectionF(&hitbox, &camera)) {
+			SDL_FPoint point = { hitbox.x, hitbox.y };
+			switch (dir) {
+			case 0:	robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite], SCREEN_SCALE); break;
+			case 1:	robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite], SCREEN_SCALE, 180); break;
+			case 2:	robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite], SCREEN_SCALE, 270); break;
+			case 3:	robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite], SCREEN_SCALE, 90); break;
+			}
+		}
 	}
-	// Returns the type of tile that the robot is standing on
-	int getTileType(Tile* tiles[]) {
+	// Returns the index of the tile that the robot is standing on
+	int getTile(Tile* tiles[]) {
 		for (int i = 0; i < MAX_TILES; i++) {
 			if (tiles[i] != nullptr) {
-				if (tiles[i]->getX() == hitbox.x && tiles[i]->getY() == hitbox.y) {
-					return tiles[i]->getType();
-				}
+				if (tiles[i]->getX() == hitbox.x && tiles[i]->getY() == hitbox.y) return i;
 			}
 		}
 	}
 	bool move(Tile* tiles[], Robot* robots[], int direction) {
 		bool success = true;
 		float distance = 0;
+		dir = direction;
 
 		// Move robot
 		switch (direction) {
@@ -288,7 +317,7 @@ public:
 		}
 		// decrement battery
 		else {
-			battery -= 0.2;
+			battery -= (float)0.2;
 			if (battery == 0) sprite = 0;
 			else if (battery < 20) sprite = 1;
 			else if (battery < 50) sprite = 2;
@@ -301,13 +330,73 @@ public:
 		battery += 10;
 		if (battery > 100) battery = 100;
 	}
-	void handleDecisions() {
+	void handleDecisions(Tile* tiles[], Tile* tileDatabase[], Robot* robots[]) {
+		
+	}
+	void sight(Tile* tiles[], Tile* tileDatabase[]) {
+		int currentTile = getTile(tiles);
+		int sightRange = 10;
+		int map_width = MAP_WIDTH / WH;
+		int map_height = MAP_HEIGHT / WH;
 
+		switch (dir) {
+		case 0:
+			for (int i = 0; i < sightRange; i++) {
+				// Record tile in database
+				tileDatabase[currentTile] = tiles[currentTile];
+
+				// Cannot see past border and any tile that is not a floor tile
+				if (currentTile - map_width < 0) break;
+				else if (tiles[currentTile - map_width] == nullptr) break;
+				else if (tiles[currentTile - map_width]->getType() != 1) break;
+				else currentTile -= map_width;
+			}
+			break;
+		case 1:
+			for (int i = 0; i < sightRange; i++) {
+				// Record tile in database
+				tileDatabase[currentTile] = tiles[currentTile];
+
+				// Cannot see past border and any tile that is not a floor tile
+				if (currentTile + map_width >= map_width * map_height) break;
+				else if (tiles[currentTile + map_width] == nullptr) break;
+				else if (tiles[currentTile + map_width]->getType() != 1) break;
+				else currentTile += map_width;
+			}
+			break;
+		case 2:
+			for (int i = 0; i < sightRange; i++) {
+				// Record tile in database
+				tileDatabase[currentTile] = tiles[currentTile];
+
+				// Cannot see past border and any tile that is not a floor tile
+				if (currentTile - map_width < 0) break;
+				else if (currentTile % map_width == 0) break;
+				else if (tiles[currentTile - 1] == nullptr) break;
+				else if (tiles[currentTile - 1]->getType() != 1) break;
+				else currentTile--;
+			}
+			break;
+		case 3:
+			for (int i = 0; i < sightRange; i++) {
+				// Record tile in database
+				tileDatabase[currentTile] = tiles[currentTile];
+
+				// Cannot see past border and any tile that is not a floor tile
+				if (currentTile + map_width >= map_width * map_height) break;
+				else if (currentTile % map_width == 9) break;
+				else if (tiles[currentTile + 1] == nullptr) break;
+				else if (tiles[currentTile + 1]->getType() != 1) break;
+				else currentTile++;
+			}
+			break;
+		}
 	}
 private:
 	SDL_FRect hitbox;
 	float battery;
 	int sprite;
+	int dir; // 0: up, 1: down, 2: left, 3: right
 };
 
 // Button class
@@ -379,7 +468,7 @@ public:
 				textTexture.loadText(text, pixellari_medium);
 
 				// Render button text in the center of the button
-				renderText(text, (float)hitbox.x + (float)hitbox.w / 2, (float)hitbox.y + (float)hitbox.h / 2, true, true);
+				renderTextMedium(text, (float)hitbox.x + (float)hitbox.w / 2, (float)hitbox.y + (float)hitbox.h / 2, true, true);
 			}
 		}
 	}
@@ -441,6 +530,7 @@ bool loadAllTextures() {
 	if (!tilesTexture.loadTexture("warehouse_resources/tiles.png", tilesTextureClips, TILE_SPRITES, WH)) success = false;
 	if (!robotTexture.loadTexture("warehouse_resources/robot.png", robotTextureClips, ROBOT_SPRITES, WH)) success = false;
 	if (!buttonTexture.loadTexture("warehouse_resources/button.png", buttonTextureClips, BUTTON_SPRITES, 750)) success = false;
+	if (!blackScreenTexture.loadTexture("warehouse_resources/black_screen.png")) success = false;
 	return success;
 }
 
@@ -451,11 +541,11 @@ bool loadFonts() {
 		printf("TTF_OpenFont error for Pixellari");
 		success = false;
 	}
-	if (!(pixellari_medium = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE * 1.5))) {
+	if (!(pixellari_medium = TTF_OpenFont("warehouse_resources/Pixellari.ttf", (int)(FONT_SIZE * 1.5)))) {
 		printf("TTF_OpenFont error for Pixellari");
 		success = false;
 	}
-	if (!(pixellari_title = TTF_OpenFont("warehouse_resources/Pixellari.ttf", FONT_SIZE * 2.5))) {
+	if (!(pixellari_title = TTF_OpenFont("warehouse_resources/Pixellari.ttf", (int)(FONT_SIZE * 2.5)))) {
 		printf("TTF_OpenFont error for Pixellari");
 		success = false;
 	}
@@ -536,10 +626,12 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 // Just a function declaration
 void simulation();
 
+// Results screen
 void results() {
 
 }
 
+// Main menu
 void menu() {
 	// Initialise variables
 	SDL_Event e;
@@ -583,8 +675,8 @@ void menu() {
 		SDL_RenderClear(renderer);
 		
 		// Render title
-		if (!changeSettings) renderTitle("Warehouse Robot Simulation", SCREEN_WIDTH / 2, 300, true);
-		else renderTitle("Settings", SCREEN_WIDTH / 2, 150, true);
+		if (!changeSettings) renderTitle("Warehouse Robot Simulation", (float)SCREEN_WIDTH / 2, 300, true);
+		else renderTitle("Settings", (float)SCREEN_WIDTH / 2, 150, true);
 
 		// Render buttons
 		for (int i = 0; i < MAX_BUTTONS; i++) {
@@ -607,6 +699,7 @@ void menu() {
 	if (startSimulation) simulation();
 }
 
+// Main simulation code
 void simulation() {
 	// Initialise variables
 	SDL_FRect camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
@@ -617,6 +710,7 @@ void simulation() {
 
 	// Initialise objects
 	Tile* tiles[MAX_TILES] = { nullptr };
+	Tile* tileDatabase[MAX_TILES] = { nullptr };
 	Robot* robots[MAX_ROBOTS] = { nullptr };
 	Button* buttons[MAX_BUTTONS] = { nullptr };
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Resume");
@@ -637,12 +731,13 @@ void simulation() {
 	else {
 		// Create robots
 		for (int i = 0; i < MAX_ROBOTS; i++) {
-			robots[i] = new Robot(0, 0);
+			robots[i] = new Robot(WH * (rand() % 50), WH * (rand() % 50), rand() % 4);
 		}
 
 		// Main loop
 		bool quit = false;
 		bool pause = false;
+		bool view = false; // false: real layout, true: robots' knowledge of the layout
 		while (!quit) {
 			// Handle events
 			while (SDL_PollEvent(&e) != 0) {
@@ -662,9 +757,23 @@ void simulation() {
 					case SDLK_LEFT: camVelX -= camSpd; break;
 					case SDLK_RIGHT: camVelX += camSpd; break;
 					// Zoom
-					case SDLK_w: if (SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5; break;
-					case SDLK_e: if (SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5; break;
-					case SDLK_r: SCREEN_SCALE = 3; break;
+					case SDLK_w: // Out
+						if (SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5;
+						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
+						camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						break;
+					case SDLK_e: // In
+						if (SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5;
+						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
+						camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						break;
+					case SDLK_r: // Reset
+						SCREEN_SCALE = 3;
+						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
+						camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						break;
+					// Switch between real layout and robots' knowledge of the layout
+					case SDLK_TAB: view = !view; break;
 					}
 				}
 
@@ -703,15 +812,14 @@ void simulation() {
 				// Process robots
 				for (int i = 0; i < MAX_ROBOTS; i++) {
 					if (robots[i] != nullptr) {
-						robots[i]->handleDecisions();
+						robots[i]->handleDecisions(tiles, tileDatabase, robots);
+						robots[i]->sight(tiles, tileDatabase);
 					}
 				}
 
 				// Process camera movement
 				camera.x += camVelX;
 				camera.y += camVelY;
-				camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
-				camera.h = (float)SCREEN_HEIGHT/ SCREEN_SCALE;
 			}
 
 			// Reset screen
@@ -719,9 +827,19 @@ void simulation() {
 			SDL_RenderClear(renderer);
 
 			// Render tiles
-			for (int i = 0; i < MAX_TILES; i++) {
-				if (tiles[i] != nullptr) {
-					tiles[i]->render(camera);
+			if (!view) {
+				for (int i = 0; i < MAX_TILES; i++) {
+					if (tiles[i] != nullptr) {
+						tiles[i]->render(camera);
+					}
+				}
+			}
+			// Render robots' known tiles
+			else {
+				for (int i = 0; i < MAX_TILES; i++) {
+					if (tileDatabase[i] != nullptr) {
+						tileDatabase[i]->render(camera);
+					}
 				}
 			}
 
@@ -732,6 +850,12 @@ void simulation() {
 				}
 			}
 
+			// Darken screen when paused
+			if (pause) {
+				blackScreenTextureClip = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+				blackScreenTexture.render(0, 0, &blackScreenTextureClip);
+			}
+
 			// Render buttons
 			for (int i = 0; i < MAX_BUTTONS; i++) {
 				if (buttons[i] != nullptr) {
@@ -740,7 +864,7 @@ void simulation() {
 			}
 
 			// Render "Paused"
-			if (pause) renderTitle("Paused", SCREEN_WIDTH / 2, 150, true, true);
+			if (pause) renderTitle("Paused", (float)SCREEN_WIDTH / 2, 150, true, true);
 
 			// Update the screen
 			SDL_RenderPresent(renderer);
