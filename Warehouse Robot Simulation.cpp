@@ -19,17 +19,24 @@ constexpr int TILE_SPRITES = 4;
 constexpr int MAX_TILES = 10000;
 // Map width
 int MAP_WIDTH = 50 * WH;
-int MAP_HEIGHT = 50 * WH * 4;
+int MAP_HEIGHT = 50 * WH;
 
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
 constexpr int MAX_ROBOTS = 10;
+// Robot battery loss per tick of movement
+float BATTERY_LOSS = 0.2;
+// Robot battery gain per tick of charging
+float BATTERY_GAIN = 5;
 
 // Number of button sprites
 constexpr int BUTTON_SPRITES = 3;
 // Maximum number of buttons
 constexpr int MAX_BUTTONS = 10;
+
+// Time control
+Uint64 TICK_INTERVAL = 50;
 
 // Initialise window and renderer
 SDL_Window* window;
@@ -269,69 +276,83 @@ public:
 	bool move(Tile* tiles[], Robot* robots[], int direction) {
 		bool success = true;
 		float distance = 0;
-		dir = direction;
 
-		// Move robot
-		switch (direction) {
-		case 0: hitbox.y -= WH; break;
-		case 1: hitbox.y += WH; break;
-		case 2: hitbox.x -= WH; break;
-		case 3: hitbox.x += WH; break;
-		}
-
-		// Set flag to cancel robot movement if it would collide with something
-		if (hitbox.x < 0 || hitbox.x > MAP_WIDTH - WH) success = false;
-		else if (hitbox.y < 0 || hitbox.y > MAP_HEIGHT - WH) success = false;
-		else {
-			for (int i = 0; i < MAX_TILES; i++) {
-				if (tiles[i] != nullptr) {
-					SDL_FRect tileHitbox = tiles[i]->getBox();
-					if (SDL_HasIntersectionF(&tileHitbox, &hitbox)) {
-						success = false;
-						break;
-					}
-				}
+		if (battery > 0) {
+			// Set direction
+			dir = direction;
+			
+			// Move robot
+			switch (direction) {
+			case 0: hitbox.y -= WH; break;
+			case 1: hitbox.y += WH; break;
+			case 2: hitbox.x -= WH; break;
+			case 3: hitbox.x += WH; break;
 			}
 
-			if (success) {
-				for (int i = 0; i < MAX_ROBOTS; i++) {
-					if (robots[i] != nullptr) {
-						SDL_FRect robotHitbox = robots[i]->getBox();
-						if (SDL_HasIntersectionF(&robotHitbox, &hitbox)) {
-							success = false;
-							break;
+			// Set flag to cancel robot movement if it would collide with something
+			if (hitbox.x < 0 || hitbox.x > MAP_WIDTH - WH) success = false;
+			else if (hitbox.y < 0 || hitbox.y > MAP_HEIGHT - WH) success = false;
+			else {
+				for (int i = 0; i < MAX_TILES; i++) {
+					if (tiles[i] != nullptr) {
+						if (tiles[i]->getType() != 1) {
+							SDL_FRect tileHitbox = tiles[i]->getBox();
+							if (SDL_HasIntersectionF(&tileHitbox, &hitbox)) {
+								success = false;
+								break;
+							}
+						}
+					}
+				}
+
+				if (success) {
+					for (int i = 0; i < MAX_ROBOTS; i++) {
+						if (robots[i] != nullptr) {
+							if (tiles[i]->getType() != 1) {
+								SDL_FRect robotHitbox = robots[i]->getBox();
+								if (SDL_HasIntersectionF(&robotHitbox, &hitbox)) {
+									success = false;
+									break;
+								}
+							}
 						}
 					}
 				}
 			}
-		}
 
-		// Cancel robot movement
-		if (!success) {
-			switch (direction) {
-			case 0: hitbox.y += WH; break;
-			case 1: hitbox.y -= WH; break;
-			case 2: hitbox.x += WH; break;
-			case 3: hitbox.x -= WH; break;
+			// Cancel robot movement
+			if (!success) {
+				switch (direction) {
+				case 0: hitbox.y += WH; break;
+				case 1: hitbox.y -= WH; break;
+				case 2: hitbox.x += WH; break;
+				case 3: hitbox.x -= WH; break;
+				}
+			}
+			// decrement battery
+			else {
+				battery -= BATTERY_LOSS;
+
+				// Set sprite based on battery
+				if (battery == 0) sprite = 0;
+				else if (battery < 20) sprite = 1;
+				else if (battery < 50) sprite = 2;
 			}
 		}
-		// decrement battery
-		else {
-			battery -= (float)0.2;
-			if (battery == 0) sprite = 0;
-			else if (battery < 20) sprite = 1;
-			else if (battery < 50) sprite = 2;
-		}
+		else success = false;
 		
 		// Returns true if moved successfully
 		return success;
 	}
-	void charge() {
-		battery += 10;
-		if (battery > 100) battery = 100;
+	void charge(Tile* tiles[]) {
+		// If standing on a charger tile, increase battery level
+		if (tiles[getTile(tiles)]->getType() == 6) {
+			battery += BATTERY_GAIN;
+			if (battery > 100) battery = 100;
+		}
 	}
 	void handleDecisions(Tile* tiles[], Tile* tileDatabase[], Robot* robots[]) {
-		
+		move(tiles, robots, rand() % 4);
 	}
 	void sight(Tile* tiles[], Tile* tileDatabase[]) {
 		int currentTile = getTile(tiles);
@@ -339,57 +360,55 @@ public:
 		int map_width = MAP_WIDTH / WH;
 		int map_height = MAP_HEIGHT / WH;
 
-		switch (dir) {
-		case 0:
-			for (int i = 0; i < sightRange; i++) {
-				// Record tile in database
-				tileDatabase[currentTile] = tiles[currentTile];
+		bool stop = false;
+		for (int i = 0; i < sightRange && !stop; i++) {
+			// Record tile in database
+			tileDatabase[currentTile] = tiles[currentTile];
 
-				// Cannot see past border and any tile that is not a floor tile
-				if (currentTile - map_width < 0) break;
-				else if (tiles[currentTile - map_width] == nullptr) break;
-				else if (tiles[currentTile - map_width]->getType() != 1) break;
+			// Stop if this tile is a shelf
+			if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5) break;
+
+			// Stop if next tile is out of bounds
+			switch (dir) {
+			case 0:
+				if (currentTile - map_width < 0) stop = true;
+				else if (tiles[currentTile - map_width] == nullptr) stop = true;
+				else if (tiles[currentTile - map_width]->getType() == 0) stop = true;
+
+				// Go to next tile
 				else currentTile -= map_width;
-			}
-			break;
-		case 1:
-			for (int i = 0; i < sightRange; i++) {
-				// Record tile in database
-				tileDatabase[currentTile] = tiles[currentTile];
+				
+				break;
+			case 1:
+				if (currentTile + map_width >= map_width * map_height) stop = true;
+				else if (tiles[currentTile + map_width] == nullptr) stop = true;
+				else if (tiles[currentTile + map_width]->getType() == 0) stop = true;
 
-				// Cannot see past border and any tile that is not a floor tile
-				if (currentTile + map_width >= map_width * map_height) break;
-				else if (tiles[currentTile + map_width] == nullptr) break;
-				else if (tiles[currentTile + map_width]->getType() != 1) break;
+				// Go to next tile
 				else currentTile += map_width;
-			}
-			break;
-		case 2:
-			for (int i = 0; i < sightRange; i++) {
-				// Record tile in database
-				tileDatabase[currentTile] = tiles[currentTile];
+				
+				break;
+			case 2:
+				if (currentTile - map_width < 0) stop = true;
+				else if (currentTile % map_width == 0) stop = true;
+				else if (tiles[currentTile - 1] == nullptr) stop = true;
+				else if (tiles[currentTile - 1]->getType() == 0) stop = true;
 
-				// Cannot see past border and any tile that is not a floor tile
-				if (currentTile - map_width < 0) break;
-				else if (currentTile % map_width == 0) break;
-				else if (tiles[currentTile - 1] == nullptr) break;
-				else if (tiles[currentTile - 1]->getType() != 1) break;
+				// Go to next tile
 				else currentTile--;
-			}
-			break;
-		case 3:
-			for (int i = 0; i < sightRange; i++) {
-				// Record tile in database
-				tileDatabase[currentTile] = tiles[currentTile];
+				
+				break;
+			case 3:
+				if (currentTile + map_width >= map_width * map_height) stop = true;
+				else if (currentTile % map_width == map_width - 1) stop = true;
+				else if (tiles[currentTile + 1] == nullptr) stop = true;
+				else if (tiles[currentTile + 1]->getType() == 0) stop = true;
 
-				// Cannot see past border and any tile that is not a floor tile
-				if (currentTile + map_width >= map_width * map_height) break;
-				else if (currentTile % map_width == 9) break;
-				else if (tiles[currentTile + 1] == nullptr) break;
-				else if (tiles[currentTile + 1]->getType() != 1) break;
+				// Go to next tile
 				else currentTile++;
+				
+				break;
 			}
-			break;
 		}
 	}
 private:
@@ -734,6 +753,9 @@ void simulation() {
 			robots[i] = new Robot(WH * (rand() % 50), WH * (rand() % 50), rand() % 4);
 		}
 
+		// Time control
+		Uint64 lastTick = 0;
+
 		// Main loop
 		bool quit = false;
 		bool pause = false;
@@ -769,8 +791,7 @@ void simulation() {
 						break;
 					case SDLK_r: // Reset
 						SCREEN_SCALE = 3;
-						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
-						camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
 						break;
 					// Switch between real layout and robots' knowledge of the layout
 					case SDLK_TAB: view = !view; break;
@@ -810,11 +831,14 @@ void simulation() {
 
 			if (!pause) {
 				// Process robots
-				for (int i = 0; i < MAX_ROBOTS; i++) {
-					if (robots[i] != nullptr) {
-						robots[i]->handleDecisions(tiles, tileDatabase, robots);
-						robots[i]->sight(tiles, tileDatabase);
+				if (SDL_GetTicks64() - lastTick > TICK_INTERVAL) {
+					for (int i = 0; i < MAX_ROBOTS; i++) {
+						if (robots[i] != nullptr) {
+							robots[i]->handleDecisions(tiles, tileDatabase, robots);
+							robots[i]->sight(tiles, tileDatabase);
+						}
 					}
+					lastTick = SDL_GetTicks64();
 				}
 
 				// Process camera movement
