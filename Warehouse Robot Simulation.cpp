@@ -26,9 +26,11 @@ constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
 constexpr int MAX_ROBOTS = 10;
 // Robot battery loss per tick of movement
-float BATTERY_LOSS = 0.2;
+float BATTERY_LOSS = (float)0.2;
 // Robot battery gain per tick of charging
 float BATTERY_GAIN = 5;
+// Maximum weight of items that a robot can carry at once
+constexpr int MAX_WEIGHT = 10;
 
 // Number of button sprites
 constexpr int BUTTON_SPRITES = 3;
@@ -216,9 +218,10 @@ void renderTitle(std::string text, float x, float y, bool center = false, bool s
 // Tile class
 class Tile {
 public:
-	Tile(float x, float y, int setType) {
+	Tile(float x, float y, int setType, int setItem = 0) {
 		hitbox = { x, y, WH, WH };
 		type = setType;
+		item = setItem;
 	}
 	void render(SDL_FRect& camera) {
 		if (type != 0) {
@@ -237,9 +240,13 @@ public:
 	int getType() {
 		return type;
 	}
+	int getItem() {
+		return item;
+	}
 private:
 	SDL_FRect hitbox;
 	int type;
+	int item;	// Item held by shelves; 0 if no item or not a shelf
 };
 
 // Robot class
@@ -250,6 +257,8 @@ public:
 		battery = 100;
 		sprite = 3;
 		dir = direction;
+		for (int i = 0; i < MAX_WEIGHT; i++) items[i] = 0;
+		weight = 0;
 	}
 	SDL_FRect getBox() {
 		return hitbox;
@@ -272,12 +281,13 @@ public:
 				if (tiles[i]->getX() == hitbox.x && tiles[i]->getY() == hitbox.y) return i;
 			}
 		}
+		return -1;
 	}
 	bool move(Tile* tiles[], Robot* robots[], int direction) {
 		bool success = true;
 		float distance = 0;
 
-		if (battery > 0) {
+		if (battery > 0 && weight <= MAX_WEIGHT) {
 			// Set direction
 			dir = direction;
 			
@@ -344,12 +354,108 @@ public:
 		// Returns true if moved successfully
 		return success;
 	}
+	bool takeShelfItem(Tile* tiles[], int direction) {
+		int currentTile = getTile(tiles);
+		int map_width = MAP_WIDTH / WH;
+		int map_height = MAP_HEIGHT / WH;
+		dir = direction;
+
+		switch (direction) {
+		case 0: // Up
+			// Check within bounds
+			if (currentTile - map_width > 0) {
+				// Check that the tile above is a bottom-facing shelf
+				if (tiles[currentTile - map_width]->getType() == 3) {
+					// Check that the robot can still hold this item
+					if (weight + tiles[currentTile - map_width]->getItem() > MAX_WEIGHT) return false;
+
+					// Take an item
+					for (int i = 0; i < MAX_WEIGHT; i++) {
+						if (items[i] == 0) {
+							items[i] = tiles[currentTile - map_width]->getItem();
+							weight += items[i];
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 1: // Down
+			// Check within bounds
+			if (currentTile + map_width < map_width * map_height) {
+				// Check that the tile below is a top-facing shelf
+				if (tiles[currentTile + map_width]->getType() == 2) {
+					// Check that the robot can still hold this item
+					if (weight + tiles[currentTile + map_width]->getItem() > MAX_WEIGHT) return false;
+
+					// Take an item
+					for (int i = 0; i < MAX_WEIGHT; i++) {
+						if (items[i] == 0) {
+							items[i] = tiles[currentTile + map_width]->getItem();
+							weight += items[i];
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 2: // Left
+			// Check within bounds
+			if (currentTile % map_width > 0) {
+				// Check that the tile to the left is a right-facing shelf
+				if (tiles[currentTile % map_width]->getType() == 5) {
+					// Check that the robot can still hold this item
+					if (weight + tiles[currentTile % map_width]->getItem() > MAX_WEIGHT) return false;
+
+					// Take an item
+					for (int i = 0; i < MAX_WEIGHT; i++) {
+						if (items[i] == 0) {
+							items[i] = tiles[currentTile % map_width]->getItem();
+							weight += items[i];
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 3: // Right
+			// Check within bounds
+			if (currentTile % map_width < map_width - 1) {
+				// Check that the tile to the right is a left-facing shelf
+				if (tiles[currentTile % map_width]->getType() == 4) {
+					// Check that the robot can still hold this item
+					if (weight + tiles[currentTile % map_width]->getItem() > MAX_WEIGHT) return false;
+
+					// Take an item
+					for (int i = 0; i < MAX_WEIGHT; i++) {
+						if (items[i] == 0) {
+							items[i] = tiles[currentTile % map_width]->getItem();
+							weight += items[i];
+							break;
+						}
+					}
+				}
+			}
+			break;
+		}
+
+		return true;
+	}
 	void charge(Tile* tiles[]) {
 		// If standing on a charger tile, increase battery level
 		if (tiles[getTile(tiles)]->getType() == 6) {
 			battery += BATTERY_GAIN;
 			if (battery > 100) battery = 100;
 		}
+	}
+	void useElevator(Tile* tiles[]) {
+
+	}
+	void passItem(Robot* robots[], int direction) {
+		
+	}
+	void submitItem(Tile* tiles[]) {
+
 	}
 	void handleDecisions(Tile* tiles[], Tile* tileDatabase[], Robot* robots[]) {
 		move(tiles, robots, rand() % 4);
@@ -370,7 +476,7 @@ public:
 
 			// Stop if next tile is out of bounds
 			switch (dir) {
-			case 0:
+			case 0: // Up
 				if (currentTile - map_width < 0) stop = true;
 				else if (tiles[currentTile - map_width] == nullptr) stop = true;
 				else if (tiles[currentTile - map_width]->getType() == 0) stop = true;
@@ -379,7 +485,7 @@ public:
 				else currentTile -= map_width;
 				
 				break;
-			case 1:
+			case 1: // Down
 				if (currentTile + map_width >= map_width * map_height) stop = true;
 				else if (tiles[currentTile + map_width] == nullptr) stop = true;
 				else if (tiles[currentTile + map_width]->getType() == 0) stop = true;
@@ -388,9 +494,8 @@ public:
 				else currentTile += map_width;
 				
 				break;
-			case 2:
-				if (currentTile - map_width < 0) stop = true;
-				else if (currentTile % map_width == 0) stop = true;
+			case 2: // Left
+				if (currentTile % map_width == 0) stop = true;
 				else if (tiles[currentTile - 1] == nullptr) stop = true;
 				else if (tiles[currentTile - 1]->getType() == 0) stop = true;
 
@@ -398,9 +503,8 @@ public:
 				else currentTile--;
 				
 				break;
-			case 3:
-				if (currentTile + map_width >= map_width * map_height) stop = true;
-				else if (currentTile % map_width == map_width - 1) stop = true;
+			case 3: // Right
+				if (currentTile % map_width == map_width - 1) stop = true;
 				else if (tiles[currentTile + 1] == nullptr) stop = true;
 				else if (tiles[currentTile + 1]->getType() == 0) stop = true;
 
@@ -416,6 +520,8 @@ private:
 	float battery;
 	int sprite;
 	int dir; // 0: up, 1: down, 2: left, 3: right
+	int items[MAX_WEIGHT]; // the items being held by the robot
+	int weight; // the current weight of items that the robot is carrying
 };
 
 // Button class
@@ -750,7 +856,7 @@ void simulation() {
 	else {
 		// Create robots
 		for (int i = 0; i < MAX_ROBOTS; i++) {
-			robots[i] = new Robot(WH * (rand() % 50), WH * (rand() % 50), rand() % 4);
+			robots[i] = new Robot((float)(WH * (rand() % 50)), (float)(WH * (rand() % 50)), rand() % 4);
 		}
 
 		// Time control
@@ -937,7 +1043,7 @@ int main(int argc, char** argv) {
 		return false;
 	}
 
-	// The warehouse robot simulation
+	// Open the warehouse robot simulation menu
 	menu();
 
 	// Close SDL library
