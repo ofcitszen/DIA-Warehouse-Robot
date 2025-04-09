@@ -11,6 +11,12 @@ int SCREEN_WIDTH = 1280;
 int SCREEN_HEIGHT = 720;
 float SCREEN_SCALE = 3;
 
+// Number of items to be retrieved
+constexpr int ITEMS_TO_RETRIEVE = 100;
+
+// Number of floors
+constexpr int NUMBER_OF_FLOORS = 4;
+
 // Tile width and height
 constexpr int WH = 16;
 // Number of tile sprites
@@ -274,7 +280,8 @@ public:
 			}
 		}
 	}
-	// Returns the index of the tile that the robot is standing on
+
+	// Get functions
 	int getTile(Tile* tiles[]) {
 		for (int i = 0; i < MAX_TILES; i++) {
 			if (tiles[i] != nullptr) {
@@ -283,8 +290,27 @@ public:
 		}
 		return -1;
 	}
+	int getItem(int index) {
+		return items[index];
+	}
+	int getWeight() {
+		return weight;
+	}
+
+	void addItem(int item) {
+		for (int i = 0; i < MAX_WEIGHT; i++) {
+			if (items[i] == 0) {
+				items[i] = item;
+				weight += items[i];
+				break;
+			}
+		}
+	}
+
+	// Actions
 	bool move(Tile* tiles[], Robot* robots[], int direction) {
 		bool success = true;
+		bool elevator = false;
 		float distance = 0;
 
 		if (battery > 0 && weight <= MAX_WEIGHT) {
@@ -309,6 +335,11 @@ public:
 							SDL_FRect tileHitbox = tiles[i]->getBox();
 							if (SDL_HasIntersectionF(&tileHitbox, &hitbox)) {
 								success = false;
+
+								// Set flag for elevators
+								if (tiles[i]->getType() == 7) {
+									elevator = true;
+								}
 								break;
 							}
 						}
@@ -318,12 +349,18 @@ public:
 				if (success) {
 					for (int i = 0; i < MAX_ROBOTS; i++) {
 						if (robots[i] != nullptr) {
-							if (tiles[i]->getType() != 1) {
-								SDL_FRect robotHitbox = robots[i]->getBox();
-								if (SDL_HasIntersectionF(&robotHitbox, &hitbox)) {
-									success = false;
-									break;
-								}
+							SDL_FRect robotHitbox = robots[i]->getBox();
+							SDL_FRect selfHitbox = hitbox;
+							
+							// Check all floors for elevator
+							if (elevator) {
+								robotHitbox.y = (float)((int)robotHitbox.y % (MAP_HEIGHT / NUMBER_OF_FLOORS));
+								selfHitbox.y = (float)((int)selfHitbox.y % (MAP_HEIGHT / NUMBER_OF_FLOORS));
+							}
+
+							if (SDL_HasIntersectionF(&robotHitbox, &selfHitbox)) {
+								success = false;
+								break;
 							}
 						}
 					}
@@ -363,77 +400,53 @@ public:
 		switch (direction) {
 		case 0: // Up
 			// Check within bounds
-			if (currentTile - map_width > 0) {
+			if (currentTile - map_width > 0 && tiles[currentTile - map_width] != nullptr) {
 				// Check that the tile above is a bottom-facing shelf
 				if (tiles[currentTile - map_width]->getType() == 3) {
 					// Check that the robot can still hold this item
 					if (weight + tiles[currentTile - map_width]->getItem() > MAX_WEIGHT) return false;
 
 					// Take an item
-					for (int i = 0; i < MAX_WEIGHT; i++) {
-						if (items[i] == 0) {
-							items[i] = tiles[currentTile - map_width]->getItem();
-							weight += items[i];
-							break;
-						}
-					}
+					addItem(tiles[currentTile - map_width]->getItem());
 				}
 			}
 			break;
 		case 1: // Down
 			// Check within bounds
-			if (currentTile + map_width < map_width * map_height) {
+			if (currentTile + map_width < map_width * map_height && tiles[currentTile + map_width] != nullptr) {
 				// Check that the tile below is a top-facing shelf
 				if (tiles[currentTile + map_width]->getType() == 2) {
 					// Check that the robot can still hold this item
 					if (weight + tiles[currentTile + map_width]->getItem() > MAX_WEIGHT) return false;
 
 					// Take an item
-					for (int i = 0; i < MAX_WEIGHT; i++) {
-						if (items[i] == 0) {
-							items[i] = tiles[currentTile + map_width]->getItem();
-							weight += items[i];
-							break;
-						}
-					}
+					addItem(tiles[currentTile + map_width]->getItem());
 				}
 			}
 			break;
 		case 2: // Left
 			// Check within bounds
-			if (currentTile % map_width > 0) {
+			if (currentTile % map_width > 0 && tiles[currentTile - 1] != nullptr) {
 				// Check that the tile to the left is a right-facing shelf
-				if (tiles[currentTile % map_width]->getType() == 5) {
+				if (tiles[currentTile - 1]->getType() == 5) {
 					// Check that the robot can still hold this item
-					if (weight + tiles[currentTile % map_width]->getItem() > MAX_WEIGHT) return false;
+					if (weight + tiles[currentTile - 1]->getItem() > MAX_WEIGHT) return false;
 
 					// Take an item
-					for (int i = 0; i < MAX_WEIGHT; i++) {
-						if (items[i] == 0) {
-							items[i] = tiles[currentTile % map_width]->getItem();
-							weight += items[i];
-							break;
-						}
-					}
+					addItem(tiles[currentTile - 1]->getItem());
 				}
 			}
 			break;
 		case 3: // Right
 			// Check within bounds
-			if (currentTile % map_width < map_width - 1) {
+			if (currentTile % map_width < map_width - 1 && tiles[currentTile + 1] != nullptr) {
 				// Check that the tile to the right is a left-facing shelf
-				if (tiles[currentTile % map_width]->getType() == 4) {
+				if (tiles[currentTile + 1]->getType() == 4) {
 					// Check that the robot can still hold this item
-					if (weight + tiles[currentTile % map_width]->getItem() > MAX_WEIGHT) return false;
+					if (weight + tiles[currentTile + 1]->getItem() > MAX_WEIGHT) return false;
 
 					// Take an item
-					for (int i = 0; i < MAX_WEIGHT; i++) {
-						if (items[i] == 0) {
-							items[i] = tiles[currentTile % map_width]->getItem();
-							weight += items[i];
-							break;
-						}
-					}
+					addItem(tiles[currentTile + 1]->getItem());
 				}
 			}
 			break;
@@ -448,15 +461,164 @@ public:
 			if (battery > 100) battery = 100;
 		}
 	}
-	void useElevator(Tile* tiles[]) {
+	void useElevator(Tile* tiles[], int updown) {
+		int currentTile = getTile(tiles);
+		int map_width = MAP_WIDTH / WH;
+		int map_height = MAP_HEIGHT / WH;
 
+		// If standing on an elevator tile
+		if (getTile(tiles) == 7) {
+			switch (updown) {
+			case 0: // Up
+				// Check bounds
+				if (currentTile + map_width * map_height / NUMBER_OF_FLOORS > map_width * map_height && tiles[currentTile + map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
+					hitbox.y -= MAP_HEIGHT / NUMBER_OF_FLOORS;
+				}
+				break;
+			case 1: // Down
+				// Check bounds
+				if (currentTile - map_width * map_height / NUMBER_OF_FLOORS > 0 && tiles[currentTile - map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
+					hitbox.y += MAP_HEIGHT / NUMBER_OF_FLOORS;
+				}
+			}
+		}
 	}
-	void passItem(Robot* robots[], int direction) {
-		
-	}
-	void submitItem(Tile* tiles[]) {
+	bool passItem(Robot* robots[], Tile* tiles[], int item, int direction) {
+		int currentTile = getTile(tiles);
+		int map_width = MAP_WIDTH / WH;
+		int map_height = MAP_HEIGHT / WH;
+		dir = direction;
 
+		switch (direction) {
+		case 0: // Up
+			// Check within bounds
+			if (currentTile - map_width > 0 && tiles[currentTile - map_width] != nullptr) {
+				// Check that there is a robot above
+				for (int i = 0; i < MAX_ROBOTS; i++) {
+					if (robots[i] != nullptr) {
+						// If this is the right robot
+						if (robots[i]->getBox().x == hitbox.x && robots[i]->getBox().y == hitbox.y - WH) {
+							// If that robot has room for the item
+							if (robots[i]->getWeight() <= MAX_WEIGHT - item) {
+								// Remove item from this robot
+								for (int j = 0; j < MAX_WEIGHT; j++) {
+									if (items[j] == item) {
+										items[j] = 0;
+										weight -= item;
+										break;
+									}
+								}
+
+								// Pass the item to that robot
+								robots[i]->addItem(item);
+								return true;
+							}
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 1: // Down
+			// Check within bounds
+			if (currentTile + map_width < map_width * map_height && tiles[currentTile + map_width] != nullptr) {
+				// Check that there is a robot below
+				for (int i = 0; i < MAX_ROBOTS; i++) {
+					if (robots[i] != nullptr) {
+						// If this is the right robot
+						if (robots[i]->getBox().x == hitbox.x && robots[i]->getBox().y == hitbox.y + WH) {
+							// If that robot has room for the item
+							if (robots[i]->getWeight() <= MAX_WEIGHT - item) {
+								// Remove item from this robot
+								for (int j = 0; j < MAX_WEIGHT; j++) {
+									if (items[j] == item) {
+										items[j] = 0;
+									}
+								}
+
+								// Pass the item to that robot
+								robots[i]->addItem(item);
+								return true;
+							}
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 2: // Left
+			if (currentTile % map_width > 0 && tiles[currentTile - 1] != nullptr) {
+				// Check that there is a robot to the left
+				for (int i = 0; i < MAX_ROBOTS; i++) {
+					if (robots[i] != nullptr) {
+						// If this is the right robot
+						if (robots[i]->getBox().x == hitbox.x - WH && robots[i]->getBox().y == hitbox.y) {
+							// If that robot has room for the item
+							if (robots[i]->getWeight() <= MAX_WEIGHT - item) {
+								// Remove item from this robot
+								for (int j = 0; j < MAX_WEIGHT; j++) {
+									if (items[j] == item) {
+										items[j] = 0;
+									}
+								}
+
+								// Pass the item to that robot
+								robots[i]->addItem(item);
+								return true;
+							}
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 3: // Right
+			if (currentTile % map_width < map_width - 1 && tiles[currentTile + 1] != nullptr) {
+				// Check that there is a robot to the left
+				for (int i = 0; i < MAX_ROBOTS; i++) {
+					if (robots[i] != nullptr) {
+						// If this is the right robot
+						if (robots[i]->getBox().x == hitbox.x + WH && robots[i]->getBox().y == hitbox.y) {
+							// If that robot has room for the item
+							if (robots[i]->getWeight() <= MAX_WEIGHT - item) {
+								// Remove item from this robot
+								for (int j = 0; j < MAX_WEIGHT; j++) {
+									if (items[j] == item) {
+										items[j] = 0;
+									}
+								}
+
+								// Pass the item to that robot
+								robots[i]->addItem(item);
+								return true;
+							}
+							break;
+						}
+					}
+				}
+			}
+			break;
+		}
+
+		return false;
 	}
+	bool submitItems(Tile* tiles[], int* itemList) {
+		// If standing on a submission tile
+		if (getTile(tiles) == 8) {
+			for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+				if (itemList[i] != 0) {
+					for (int j = 0; j < MAX_WEIGHT; j++) {
+						if (items[j] == itemList[i] && items[j] != 0) {
+							// Submit the item
+							items[j] = 0;
+							itemList[i] = 0;
+						}
+					}
+				}
+			}
+		}
+	}
+
 	void handleDecisions(Tile* tiles[], Tile* tileDatabase[], Robot* robots[]) {
 		move(tiles, robots, rand() % 4);
 	}
@@ -957,7 +1119,7 @@ void simulation() {
 			SDL_RenderClear(renderer);
 
 			// Render tiles
-			if (!view) {
+			if (view) {
 				for (int i = 0; i < MAX_TILES; i++) {
 					if (tiles[i] != nullptr) {
 						tiles[i]->render(camera);
@@ -1025,7 +1187,7 @@ void simulation() {
 	}
 
 	if (returnMenu) menu();
-	if (finishSimulation) results();
+	else if (finishSimulation) results();
 }
 
 int main(int argc, char** argv) {
