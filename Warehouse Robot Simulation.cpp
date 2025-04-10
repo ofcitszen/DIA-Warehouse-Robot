@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <vector>
 
 // Screen sizes
 int SCREEN_WIDTH = 1280;
@@ -20,17 +21,17 @@ constexpr int NUMBER_OF_FLOORS = 4;
 // Tile width and height
 constexpr int WH = 16;
 // Number of tile sprites
-constexpr int TILE_SPRITES = 4;
+constexpr int TILE_SPRITES = 9;
 // Maximum number of tiles
 constexpr int MAX_TILES = 10000;
 // Map width
 int MAP_WIDTH = 50 * WH;
-int MAP_HEIGHT = 50 * WH;
+int MAP_HEIGHT = 50 * WH * 4;
 
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
-constexpr int MAX_ROBOTS = 10;
+constexpr int MAX_ROBOTS = 50;
 // Robot battery loss per tick of movement
 float BATTERY_LOSS = (float)0.2;
 // Robot battery gain per tick of charging
@@ -44,7 +45,7 @@ constexpr int BUTTON_SPRITES = 3;
 constexpr int MAX_BUTTONS = 10;
 
 // Time control
-Uint64 TICK_INTERVAL = 50;
+Uint64 TICK_INTERVAL = 0;
 
 // Initialise window and renderer
 SDL_Window* window;
@@ -224,14 +225,29 @@ void renderTitle(std::string text, float x, float y, bool center = false, bool s
 // Tile class
 class Tile {
 public:
-	Tile(float x, float y, int setType, int setItem = 0) {
+	Tile(float x, float y, int setType) {
 		hitbox = { x, y, WH, WH };
 		type = setType;
-		item = setItem;
+		
+		if (type >= 2 && type <= 5) {
+			item = rand() % 10 + 1;
+		}
+		else item = -1;
 	}
 	void render(SDL_FRect& camera) {
 		if (type != 0) {
-			if (SDL_HasIntersectionF(&hitbox, &camera)) tilesTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &tilesTextureClips[type - 1]);
+			if (SDL_HasIntersectionF(&hitbox, &camera)) {
+				tilesTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &tilesTextureClips[type - 1]);
+
+				// If shelf tile, show item contained in it
+				//if (type >= 2 && type <= 5) {
+				//	// Load text to get its dimensions
+				//	textTexture.loadText(std::to_string(item), pixellari);
+
+				//	// Render text in the center of the shelf
+				//	renderText(std::to_string(item), (float)hitbox.x + (float)hitbox.w / 2 - camera.x * SCREEN_SCALE, (float)hitbox.y + (float)hitbox.h / 2 - camera.y * SCREEN_SCALE, true, true);
+				//}
+			}
 		}
 	}
 	SDL_FRect getBox() {
@@ -258,13 +274,24 @@ private:
 // Robot class
 class Robot {
 public:
-	Robot(float x, float y, int direction) {
+	Robot(float x, float y, int direction, int setBattery = 100, int setItems[MAX_WEIGHT] = nullptr) {
 		hitbox = { x, y, WH, WH };
-		battery = 100;
+		weightBar = { 0, -20, WH, 5 };
+		battery = setBattery;
 		sprite = 3;
 		dir = direction;
-		for (int i = 0; i < MAX_WEIGHT; i++) items[i] = 0;
 		weight = 0;
+		if (setItems == nullptr) {
+			for (int i = 0; i < MAX_WEIGHT; i++) {
+				items[i] = 0;
+			}
+		}
+		else {
+			for (int i = 0; i < MAX_WEIGHT; i++) {
+				items[i] = setItems[i];
+				weight += setItems[i];
+			}
+		}
 	}
 	SDL_FRect getBox() {
 		return hitbox;
@@ -278,6 +305,16 @@ public:
 			case 2:	robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite], SCREEN_SCALE, 270); break;
 			case 3:	robotTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &robotTextureClips[sprite], SCREEN_SCALE, 90); break;
 			}
+
+			// Set weight bar size
+			weightBar = { hitbox.x - camera.x, hitbox.y - 5 - camera.y, WH * (float)weight / (float)MAX_WEIGHT, 4 };
+			weightBar.x *= SCREEN_SCALE;
+			weightBar.y *= SCREEN_SCALE;
+			weightBar.w *= SCREEN_SCALE;
+			weightBar.h *= SCREEN_SCALE;
+			// Render weight bar
+			SDL_SetRenderDrawColor(renderer, 0x46, 0xa2, 0xFF, 0xFF);
+			SDL_RenderFillRectF(renderer, &weightBar);
 		}
 	}
 
@@ -293,8 +330,14 @@ public:
 	int getItem(int index) {
 		return items[index];
 	}
+	int* getItems() {
+		return items;
+	}
 	int getWeight() {
 		return weight;
+	}
+	float getBattery() {
+		return battery;
 	}
 
 	void addItem(int item) {
@@ -311,7 +354,6 @@ public:
 	bool move(Tile* tiles[], Robot* robots[], int direction) {
 		bool success = true;
 		bool elevator = false;
-		float distance = 0;
 
 		if (battery > 0 && weight <= MAX_WEIGHT) {
 			// Set direction
@@ -331,7 +373,7 @@ public:
 			else {
 				for (int i = 0; i < MAX_TILES; i++) {
 					if (tiles[i] != nullptr) {
-						if (tiles[i]->getType() != 1) {
+						if (tiles[i]->getType() != 1 && (tiles[i]->getType() < 6 || tiles[i]->getType() > 8)) {
 							SDL_FRect tileHitbox = tiles[i]->getBox();
 							if (SDL_HasIntersectionF(&tileHitbox, &hitbox)) {
 								success = false;
@@ -346,6 +388,7 @@ public:
 					}
 				}
 
+				int instances = 0;
 				if (success) {
 					for (int i = 0; i < MAX_ROBOTS; i++) {
 						if (robots[i] != nullptr) {
@@ -359,6 +402,11 @@ public:
 							}
 
 							if (SDL_HasIntersectionF(&robotHitbox, &selfHitbox)) {
+								instances++;
+							}
+
+							// If hit itself + another robot
+							if (instances > 1) {
 								success = false;
 								break;
 							}
@@ -452,36 +500,64 @@ public:
 			break;
 		}
 
+		battery -= BATTERY_LOSS;
+
+		// Set sprite based on battery
+		if (battery == 0) sprite = 0;
+		else if (battery < 20) sprite = 1;
+		else if (battery < 50) sprite = 2;
+
 		return true;
 	}
-	void charge(Tile* tiles[]) {
+	bool charge(Tile* tiles[]) {
 		// If standing on a charger tile, increase battery level
 		if (tiles[getTile(tiles)]->getType() == 6) {
 			battery += BATTERY_GAIN;
 			if (battery > 100) battery = 100;
+			return true;
 		}
+		return false;
 	}
-	void useElevator(Tile* tiles[], int updown) {
+	bool useElevator(Tile* tiles[], int updown) {
 		int currentTile = getTile(tiles);
 		int map_width = MAP_WIDTH / WH;
 		int map_height = MAP_HEIGHT / WH;
 
 		// If standing on an elevator tile
-		if (getTile(tiles) == 7) {
+		if (tiles[getTile(tiles)]->getType() == 7) {
 			switch (updown) {
 			case 0: // Up
 				// Check bounds
-				if (currentTile + map_width * map_height / NUMBER_OF_FLOORS > map_width * map_height && tiles[currentTile + map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
-					hitbox.y -= MAP_HEIGHT / NUMBER_OF_FLOORS;
+				if ((currentTile + map_width * map_height / NUMBER_OF_FLOORS < map_width * map_height) && tiles[currentTile + map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
+					hitbox.y += MAP_HEIGHT / NUMBER_OF_FLOORS;
+
+					battery -= BATTERY_LOSS;
+
+					// Set sprite based on battery
+					if (battery == 0) sprite = 0;
+					else if (battery < 20) sprite = 1;
+					else if (battery < 50) sprite = 2;
+
+					return true;
 				}
 				break;
 			case 1: // Down
 				// Check bounds
-				if (currentTile - map_width * map_height / NUMBER_OF_FLOORS > 0 && tiles[currentTile - map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
-					hitbox.y += MAP_HEIGHT / NUMBER_OF_FLOORS;
+				if ((currentTile - map_width * map_height / NUMBER_OF_FLOORS > 0) && tiles[currentTile - map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
+					hitbox.y -= MAP_HEIGHT / NUMBER_OF_FLOORS;
+
+					battery -= BATTERY_LOSS;
+
+					// Set sprite based on battery
+					if (battery == 0) sprite = 0;
+					else if (battery < 20) sprite = 1;
+					else if (battery < 50) sprite = 2;
+
+					return true;
 				}
 			}
 		}
+		return false;
 	}
 	bool passItem(Robot* robots[], Tile* tiles[], int item, int direction) {
 		int currentTile = getTile(tiles);
@@ -511,6 +587,14 @@ public:
 
 								// Pass the item to that robot
 								robots[i]->addItem(item);
+
+								battery -= BATTERY_LOSS;
+
+								// Set sprite based on battery
+								if (battery == 0) sprite = 0;
+								else if (battery < 20) sprite = 1;
+								else if (battery < 50) sprite = 2;
+
 								return true;
 							}
 							break;
@@ -538,6 +622,14 @@ public:
 
 								// Pass the item to that robot
 								robots[i]->addItem(item);
+
+								battery -= BATTERY_LOSS;
+
+								// Set sprite based on battery
+								if (battery == 0) sprite = 0;
+								else if (battery < 20) sprite = 1;
+								else if (battery < 50) sprite = 2;
+
 								return true;
 							}
 							break;
@@ -564,6 +656,14 @@ public:
 
 								// Pass the item to that robot
 								robots[i]->addItem(item);
+
+								battery -= BATTERY_LOSS;
+
+								// Set sprite based on battery
+								if (battery == 0) sprite = 0;
+								else if (battery < 20) sprite = 1;
+								else if (battery < 50) sprite = 2;
+
 								return true;
 							}
 							break;
@@ -590,6 +690,14 @@ public:
 
 								// Pass the item to that robot
 								robots[i]->addItem(item);
+
+								battery -= BATTERY_LOSS;
+
+								// Set sprite based on battery
+								if (battery == 0) sprite = 0;
+								else if (battery < 20) sprite = 1;
+								else if (battery < 50) sprite = 2;
+
 								return true;
 							}
 							break;
@@ -604,25 +712,36 @@ public:
 	}
 	bool submitItems(Tile* tiles[], int* itemList) {
 		// If standing on a submission tile
-		if (getTile(tiles) == 8) {
-			for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
-				if (itemList[i] != 0) {
-					for (int j = 0; j < MAX_WEIGHT; j++) {
-						if (items[j] == itemList[i] && items[j] != 0) {
-							// Submit the item
-							items[j] = 0;
-							itemList[i] = 0;
+		if (tiles[getTile(tiles)]->getType() == 8) {
+			for (int j = 0; j < MAX_WEIGHT; j++) {
+				if (items[j] != 0) {
+					for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+						if (itemList[i] != 0) {
+							if (items[j] == itemList[i]) {
+								// Submit the item
+								items[j] = 0;
+								itemList[i] = 0;
+
+								battery -= BATTERY_LOSS;
+
+								// Set sprite based on battery
+								if (battery == 0) sprite = 0;
+								else if (battery < 20) sprite = 1;
+								else if (battery < 50) sprite = 2;
+
+								return true;
+							}
 						}
 					}
 				}
 			}
 		}
+		return false;
 	}
 
-	void handleDecisions(Tile* tiles[], Tile* tileDatabase[], Robot* robots[]) {
-		move(tiles, robots, rand() % 4);
-	}
-	void sight(Tile* tiles[], Tile* tileDatabase[]) {
+	double sight(Tile* tiles[], Tile* tileDatabase[]) {
+		double reward = 0;
+
 		int currentTile = getTile(tiles);
 		int sightRange = 10;
 		int map_width = MAP_WIDTH / WH;
@@ -631,7 +750,10 @@ public:
 		bool stop = false;
 		for (int i = 0; i < sightRange && !stop; i++) {
 			// Record tile in database
-			tileDatabase[currentTile] = tiles[currentTile];
+			if (tileDatabase[currentTile] == nullptr) {
+				tileDatabase[currentTile] = tiles[currentTile];
+				reward += 10;
+			}
 
 			// Stop if this tile is a shelf
 			if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5) break;
@@ -676,9 +798,11 @@ public:
 				break;
 			}
 		}
+		return reward;
 	}
 private:
 	SDL_FRect hitbox;
+	SDL_FRect weightBar;
 	float battery;
 	int sprite;
 	int dir; // 0: up, 1: down, 2: left, 3: right
@@ -773,6 +897,239 @@ private:
 	bool shown;
 	int sprite;
 	bool disabled;
+};
+
+// Node struct
+struct Node {
+	int action = 0;
+	std::vector<Node*> children;
+	Node* parent = nullptr;
+	int visits = 0;
+	double UCBval = 0.0;
+
+	// Game state
+	Tile* tiles[MAX_TILES] = { nullptr };
+	Robot* robots[MAX_ROBOTS] = { nullptr };
+	int itemList[ITEMS_TO_RETRIEVE] = { 0 };
+
+	Node(int setAction, Node* setParent = nullptr) {
+		action = setAction;
+		parent = setParent;
+	}
+
+	// Destructor to recursively delete child nodes
+	~Node() {
+		for (Node* child : children) {
+			delete child; // Delete each child node
+			child = nullptr;
+		}
+	}
+};
+
+// MCTS
+class MCTS {
+public:
+	MCTS(Tile* tileSet[], Tile* tilesDatabaseSet[], Robot* robotsSet[], int itemsListSet[], int numOfSimulations, int robotNumber) {
+		for (int i = 0; i < MAX_TILES; i++) {
+			tiles[i] = tileSet[i];
+			tilesDatabase[i] = tilesDatabaseSet[i];
+		}
+
+		for (int i = 0; i < MAX_ROBOTS; i++) {
+			robots[i] = new Robot(robotsSet[i]->getBox().x, robotsSet[i]->getBox().y, 0, robotsSet[i]->getBattery(), robotsSet[i]->getItems());
+		}
+
+		for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+			itemsList[i] = itemsListSet[i];
+		}
+
+		numSim = numOfSimulations;
+		robotNum = robotNumber;
+	}
+
+	Node* run(Node* root) {
+		for (int i = 0; i < numSim; i++) {
+			Node* selected = select(root);
+			Node* expanded = expand(selected);
+			//double reward = simulate(expanded);
+			//backpropagate(expanded, reward);
+		}
+		return bestChild(root);
+	}
+private:
+	Tile* tiles[MAX_TILES];
+	Tile* tilesDatabase[MAX_TILES];
+	Robot* robots[MAX_ROBOTS];
+	int itemsList[ITEMS_TO_RETRIEVE];
+	int numSim;
+	int robotNum;
+
+	// Select the child with the highest Upper Confidence Bound (UCB) value and return it
+	Node* select(Node* node) {
+		while (!node->children.empty()) {
+			node = bestUCT(node);
+		}
+		return node;
+	}
+
+	// Expand the current node by generating all possible moves as child nodes
+	Node* expand(Node* node) {
+		for (int i = 0; i < 13; i++) {
+			bool success = false;
+
+			if (i == 0) success = true;
+			if (i >= 1 && i <= 4) {
+				success = robots[robotNum]->move(tiles, robots, i - 1);
+			}
+			if (i >= 5 && i <= 8) {
+				success = robots[robotNum]->takeShelfItem(tiles, i - 5);
+			}
+			if (i == 9) {
+				success = robots[robotNum]->charge(tiles);
+			}
+			if (i >= 10 && i <= 11) {
+				success = robots[robotNum]->useElevator(tiles, i - 10);
+			}
+			/*if (i >= 12 && i <= 51) {
+				success = robots[robotNum]->passItem(robots, tiles, (i - 12) % 10 + 1, (int)((i - 12) / 10));
+			}*/
+			if (i == 12) {
+				success = robots[robotNum]->submitItems(tiles, itemsList);
+			}
+
+			if (success) {
+				Node* child = new Node(i, node);
+				node->children.push_back(child);
+
+				backpropagate(child, simulate(child));
+			}
+		}
+		return node->children[std::rand() % node->children.size()]; // Return a random child node for simulate step
+	}
+
+	// Simulate a random rollout path from the current node
+	double simulate(Node* node) {
+		double reward = 0.0;
+		int ticks = 0;
+
+		// Simulation
+		bool stop = false;
+		while (!stop) {
+			int action = node->action;
+			if (ticks > 0) action = rand() % 13;
+
+			bool success = false;
+
+			if (action == 0) {
+				success = true;
+			}
+			if (action >= 1 && action <= 4) {
+				success = robots[robotNum]->move(tilesDatabase, robots, action - 1);
+				if (success) reward += 100;
+			}
+			if (action >= 5 && action <= 8) {
+				success = robots[robotNum]->takeShelfItem(tilesDatabase, action - 5);
+				if (success) reward += 100;
+			}
+			if (action == 9) {
+				success = robots[robotNum]->charge(tilesDatabase);
+			}
+			if (action >= 10 && action <= 11) {
+				success = robots[robotNum]->useElevator(tilesDatabase, action - 10);
+			}
+			/*if (action >= 12 && action <= 51) {
+				success = robots[robotNum]->passItem(robots, tiles, (action - 12) % 10 + 1, (int)((action - 12) / 10));
+				if (success) reward += 1;
+			}*/
+			if (action == 12) {
+				success = robots[robotNum]->submitItems(tilesDatabase, itemsList);
+				if (success) reward += 1000000;
+			}
+
+			// Penalty for illegal move
+			if (!success) break;
+
+			reward += robots[robotNum]->sight(tiles, tilesDatabase) * 100;
+			ticks++;
+
+			// Check for termination criteria
+			stop = true;
+			for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+				if (itemsList[i] != 0) {
+					stop = false;
+					break;
+				}
+			}
+			if (ticks > 100) stop = true;
+		}
+
+		// Additional reward calculations
+		//if (robots[robotNum]->getBattery() == 0) reward -= 100000;
+		//reward -= ticks;
+
+		return reward;
+	}
+
+	// Backpropagate the reward through the tree, updating visits and value
+	void backpropagate(Node* node, double reward) {
+		while (node != nullptr) {
+			node->visits++; // Increment the visit count
+			node->UCBval += reward; // Add the reward value
+			node = node->parent; // Move up to the parent node
+		}
+	}
+
+	// Find the child with the best Upper Confidence Bound (UCB) value
+	Node* bestUCT(Node* node) {
+		Node* best = nullptr;
+		double bestValue = -std::numeric_limits<double>::infinity();
+
+		for (Node* child : node->children) {
+			double uctValue = child->UCBval / (child->visits + 1e-6) + 1 *
+				std::sqrt(std::log(node->visits + 1) / (child->visits + 1e-6));
+			if (uctValue > bestValue) {
+				bestValue = uctValue;
+				best = child;
+			}
+		}
+		return best;
+	}
+
+	// Select the child node with the best average reward
+	Node* bestChild(Node* node) {
+		Node* best = nullptr;
+		double bestValue = -std::numeric_limits<double>::infinity();
+
+		for (Node* child : node->children) {
+			double value = child->UCBval;// / (child->visits + 1e-6); // Calculate average reward
+			if (value > bestValue) {
+				bestValue = value;
+				best = child;
+			}
+		}
+		return best;
+	}
+};
+
+// Q-learning
+class Qlearning {
+public:
+	Qlearning(Tile* setTileDatabase[], Robot* setRobots[], double alpha, double gamma)
+		: alpha(alpha), gamma(gamma) {
+		for (int i = 0; i < MAX_TILES; i++) {
+			tileDatabase[i] = setTileDatabase[i];
+		}
+		for (int i = 0; i < MAX_ROBOTS; i++) {
+			robots[i] = setRobots[i];
+		}
+
+
+	}
+private:
+	Tile* tileDatabase[MAX_TILES];
+	Robot* robots[MAX_ROBOTS];
+	double alpha;
+	double gamma;
 };
 
 // Initialises the SDL library
@@ -910,11 +1267,12 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 	return success;
 }
 
-// Just a function declaration
+// Just function declarations
 void simulation();
+void train();
 
 // Results screen
-void results() {
+void results(int ticks) {
 
 }
 
@@ -926,14 +1284,16 @@ void menu() {
 	// Initialise buttons
 	Button* buttons[MAX_BUTTONS] = { nullptr };
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Settings");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
-	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Back");
-	buttons[3]->setShown();
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Train");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Settings");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
+	buttons[4] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
+	buttons[4]->setShown();
 
 	// Main loop
 	bool quit = false;
 	bool startSimulation = false;
+	bool startTraining = false;
 	bool changeSettings = false;
 	while (!quit) {
 		// Handle events
@@ -947,14 +1307,20 @@ void menu() {
 				startSimulation = true;
 			}
 
+			// Start button
+			if (buttons[1]->isShown() && buttons[1]->handleEvents(e)) {
+				quit = true;
+				startTraining = true;
+			}
+
 			// Settings button and Back button
-			if (buttons[1]->isShown() && buttons[1]->handleEvents(e) || buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
+			if (buttons[2]->isShown() && buttons[2]->handleEvents(e) || buttons[4]->isShown() && buttons[4]->handleEvents(e)) {
 				changeSettings = !changeSettings;
-				for (int i = 0; i < 4; i++) buttons[i]->setShown();
+				for (int i = 0; i < 5; i++) buttons[i]->setShown();
 			}
 
 			// Quit button
-			if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) quit = true;
+			if (buttons[3]->isShown() && buttons[3]->handleEvents(e)) quit = true;
 		}
 
 		// Reset screen
@@ -984,6 +1350,12 @@ void menu() {
 	}
 
 	if (startSimulation) simulation();
+	else if (startTraining) train();
+}
+
+// Training code
+void train() {
+
 }
 
 // Main simulation code
@@ -994,6 +1366,10 @@ void simulation() {
 	float camVelX = 0;
 	float camVelY = 0;
 	SDL_Event e;
+
+	// Results screen variables
+	int ticks = 0;
+	int itemsRetrieved = 0;
 
 	// Initialise objects
 	Tile* tiles[MAX_TILES] = { nullptr };
@@ -1009,12 +1385,18 @@ void simulation() {
 	// Random seed
 	srand((unsigned int)time(0));
 
+	// List of items to retrieve
+	int itemList[ITEMS_TO_RETRIEVE] = {0};
+	for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+		itemList[i] = rand() % 10 + 1;
+	}
+
 	// Event flag
 	bool returnMenu = false;
 	bool finishSimulation = false;
 
 	// Create tiles based on map
-	if (!setTiles(tiles, "warehouse_resources/test_map.map", 50 * WH, 50 * WH)) printf("setTiles() error\n");
+	if (!setTiles(tiles, "warehouse_resources/map1.map", 50 * WH, 50 * WH * 4)) printf("setTiles() error\n");
 	else {
 		// Create robots
 		for (int i = 0; i < MAX_ROBOTS; i++) {
@@ -1028,7 +1410,10 @@ void simulation() {
 		bool quit = false;
 		bool pause = false;
 		bool view = false; // false: real layout, true: robots' knowledge of the layout
+
 		while (!quit) {
+			ticks++;
+
 			// Handle events
 			while (SDL_PollEvent(&e) != 0) {
 				// The close button
@@ -1102,8 +1487,35 @@ void simulation() {
 				if (SDL_GetTicks64() - lastTick > TICK_INTERVAL) {
 					for (int i = 0; i < MAX_ROBOTS; i++) {
 						if (robots[i] != nullptr) {
-							robots[i]->handleDecisions(tiles, tileDatabase, robots);
+							Node* root = new Node(0);
+							MCTS mcts(tiles, tileDatabase, robots, itemList, 20, i);
+							Node* best = mcts.run(root);
+							int action = best->action;
+							//int action = rand() % 13;
+
+							if (action >= 1 && action <= 4) {
+								robots[i]->move(tiles, robots, action - 1);
+							}
+							if (action >= 5 && action <= 8) {
+								robots[i]->takeShelfItem(tiles, action - 5);
+							}
+							if (action == 9) {
+								robots[i]->charge(tiles);
+							}
+							if (action >= 10 && action <= 11) {
+								robots[i]->useElevator(tiles, action - 10);
+							}
+							/*if (action >= 12 && action <= 51) {
+								robots[i]->passItem(robots, tiles, (action - 12) % 10 + 1, (int)((action - 12) / 10));
+							}*/
+							if (action == 12) {
+								if (robots[i]->submitItems(tiles, itemList)) itemsRetrieved++;
+							}
+
 							robots[i]->sight(tiles, tileDatabase);
+
+							delete(root);
+							root = nullptr;
 						}
 					}
 					lastTick = SDL_GetTicks64();
@@ -1187,7 +1599,11 @@ void simulation() {
 	}
 
 	if (returnMenu) menu();
-	else if (finishSimulation) results();
+	else if (finishSimulation) {
+		printf("Total Ticks: %d\n", ticks);
+		if (itemsRetrieved > 0) printf("Average ticks per item: %f\n", (float)(ticks / itemsRetrieved));
+		printf("Items retrieved: %d\n", itemsRetrieved);
+	}
 }
 
 int main(int argc, char** argv) {
