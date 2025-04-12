@@ -31,7 +31,7 @@ int MAP_HEIGHT = 50 * WH * 4;
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
-constexpr int MAX_ROBOTS = 1;
+constexpr int MAX_ROBOTS = 5;
 // Robot battery loss per tick of movement
 float BATTERY_LOSS = (float)0.2;
 // Robot battery gain per tick of charging
@@ -274,7 +274,7 @@ private:
 // Robot class
 class Robot {
 public:
-	Robot(float x, float y, int direction, int setBattery = 100, int setItems[MAX_WEIGHT] = nullptr) {
+	Robot(float x, float y, int direction = 1, float setBattery = 100, int setItems[MAX_WEIGHT] = nullptr) {
 		hitbox = { x, y, WH, WH };
 		weightBar = { 0, -20, WH, 5 };
 		battery = setBattery;
@@ -292,9 +292,10 @@ public:
 				weight += setItems[i];
 			}
 		}
-	}
-	SDL_FRect getBox() {
-		return hitbox;
+
+		for (int i = 0; i < MAX_TILES; i++) {
+			visitHistory[i] = 0;
+		}
 	}
 	void render(SDL_FRect& camera) {
 		if (SDL_HasIntersectionF(&hitbox, &camera)) {
@@ -319,13 +320,16 @@ public:
 	}
 
 	// Get functions
+	SDL_FRect getBox() {
+		return hitbox;
+	}
 	int getTile(Tile* tiles[]) {
 		for (int i = 0; i < MAX_TILES; i++) {
 			if (tiles[i] != nullptr) {
 				if (tiles[i]->getX() == hitbox.x && tiles[i]->getY() == hitbox.y) return i;
 			}
 		}
-		return -1;
+		return 0;
 	}
 	int getItem(int index) {
 		return items[index];
@@ -339,6 +343,13 @@ public:
 	float getBattery() {
 		return battery;
 	}
+	int getDir() {
+		return dir;
+	}
+	int getHistory(int index) {
+		if (index >= 0 && index <= MAP_WIDTH * MAP_HEIGHT / WH / WH) return visitHistory[index];
+		else return 0;
+	}
 
 	void addItem(int item) {
 		for (int i = 0; i < MAX_WEIGHT; i++) {
@@ -348,6 +359,25 @@ public:
 				break;
 			}
 		}
+	}
+
+	// Set functions
+	void setXY(float x, float y) {
+		hitbox.x = x;
+		hitbox.y = y;
+	}
+	void setItems(int setItems[]) {
+		weight = 0;
+		for (int i = 0; i < MAX_WEIGHT; i++) {
+			items[i] = setItems[i];
+			weight += setItems[i];
+		}
+	}
+	void setDir(int direction) {
+		dir = direction;
+	}
+	void setBattery(float batteryLevel) {
+		battery = batteryLevel;
 	}
 
 	// Actions
@@ -461,53 +491,69 @@ public:
 		case 0: // Up
 			// Check within bounds
 			if (currentTile - map_width > 0 && tiles[currentTile - map_width] != nullptr) {
-				// Check that the tile above is a bottom-facing shelf
-				if (tiles[currentTile - map_width]->getType() == 3) {
-					// Check that the robot can still hold this item
-					if (weight + tiles[currentTile - map_width]->getItem() > MAX_WEIGHT) return false;
+				if (tiles[currentTile - map_width] != nullptr) {
+					// Check that the tile above is a bottom-facing shelf
+					if (tiles[currentTile - map_width]->getType() == 3) {
+						// Check that the robot can still hold this item
+						if (weight + tiles[currentTile - map_width]->getItem() > MAX_WEIGHT) return false;
 
-					// Take an item
-					addItem(tiles[currentTile - map_width]->getItem());
+						// Take an item
+						addItem(tiles[currentTile - map_width]->getItem());
+					}
+					else return false;
 				}
+				else return false;
 			}
 			break;
 		case 1: // Down
 			// Check within bounds
 			if (currentTile + map_width < map_width * map_height && tiles[currentTile + map_width] != nullptr) {
-				// Check that the tile below is a top-facing shelf
-				if (tiles[currentTile + map_width]->getType() == 2) {
-					// Check that the robot can still hold this item
-					if (weight + tiles[currentTile + map_width]->getItem() > MAX_WEIGHT) return false;
+				if (tiles[currentTile + map_width] != nullptr) {
+					// Check that the tile below is a top-facing shelf
+					if (tiles[currentTile + map_width]->getType() == 2) {
+						// Check that the robot can still hold this item
+						if (weight + tiles[currentTile + map_width]->getItem() > MAX_WEIGHT) return false;
 
-					// Take an item
-					addItem(tiles[currentTile + map_width]->getItem());
+						// Take an item
+						addItem(tiles[currentTile + map_width]->getItem());
+					}
+					else return false;
 				}
+				else return false;
 			}
 			break;
 		case 2: // Left
 			// Check within bounds
 			if (currentTile % map_width > 0 && tiles[currentTile - 1] != nullptr) {
-				// Check that the tile to the left is a right-facing shelf
-				if (tiles[currentTile - 1]->getType() == 5) {
-					// Check that the robot can still hold this item
-					if (weight + tiles[currentTile - 1]->getItem() > MAX_WEIGHT) return false;
+				if (tiles[currentTile - 1] != nullptr) {
+					// Check that the tile to the left is a right-facing shelf
+					if (tiles[currentTile - 1]->getType() == 5) {
+						// Check that the robot can still hold this item
+						if (weight + tiles[currentTile - 1]->getItem() > MAX_WEIGHT) return false;
 
-					// Take an item
-					addItem(tiles[currentTile - 1]->getItem());
+						// Take an item
+						addItem(tiles[currentTile - 1]->getItem());
+					}
+					else return false;
 				}
+				else return false;
 			}
 			break;
 		case 3: // Right
 			// Check within bounds
 			if (currentTile % map_width < map_width - 1 && tiles[currentTile + 1] != nullptr) {
-				// Check that the tile to the right is a left-facing shelf
-				if (tiles[currentTile + 1]->getType() == 4) {
-					// Check that the robot can still hold this item
-					if (weight + tiles[currentTile + 1]->getItem() > MAX_WEIGHT) return false;
+				if (tiles[currentTile + 1] != nullptr) {
+					// Check that the tile to the right is a left-facing shelf
+					if (tiles[currentTile + 1]->getType() == 4) {
+						// Check that the robot can still hold this item
+						if (weight + tiles[currentTile + 1]->getItem() > MAX_WEIGHT) return false;
 
-					// Take an item
-					addItem(tiles[currentTile + 1]->getItem());
+						// Take an item
+						addItem(tiles[currentTile + 1]->getItem());
+					}
+					else return false;
 				}
+				else return false;
 			}
 			break;
 		}
@@ -523,10 +569,12 @@ public:
 	}
 	bool charge(Tile* tiles[]) {
 		// If standing on a charger tile, increase battery level
-		if (tiles[getTile(tiles)]->getType() == 6) {
-			battery += BATTERY_GAIN;
-			if (battery > 100) battery = 100;
-			return true;
+		if (tiles[getTile(tiles)] != nullptr) {
+			if (tiles[getTile(tiles)]->getType() == 6) {
+				battery += BATTERY_GAIN;
+				if (battery > 100) battery = 100;
+				return true;
+			}
 		}
 		return false;
 	}
@@ -536,36 +584,38 @@ public:
 		int map_height = MAP_HEIGHT / WH;
 
 		// If standing on an elevator tile
-		if (tiles[getTile(tiles)]->getType() == 7) {
-			switch (updown) {
-			case 0: // Up
-				// Check bounds
-				if ((currentTile + map_width * map_height / NUMBER_OF_FLOORS < map_width * map_height) && tiles[currentTile + map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
-					hitbox.y += MAP_HEIGHT / NUMBER_OF_FLOORS;
+		if (tiles[getTile(tiles)] != nullptr) {
+			if (tiles[getTile(tiles)]->getType() == 7) {
+				switch (updown) {
+				case 0: // Up
+					// Check bounds
+					if ((currentTile + map_width * map_height / NUMBER_OF_FLOORS < map_width * map_height) && tiles[currentTile + map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
+						hitbox.y += MAP_HEIGHT / NUMBER_OF_FLOORS;
 
-					battery -= BATTERY_LOSS;
+						battery -= BATTERY_LOSS;
 
-					// Set sprite based on battery
-					if (battery == 0) sprite = 0;
-					else if (battery < 20) sprite = 1;
-					else if (battery < 50) sprite = 2;
+						// Set sprite based on battery
+						if (battery == 0) sprite = 0;
+						else if (battery < 20) sprite = 1;
+						else if (battery < 50) sprite = 2;
 
-					return true;
-				}
-				break;
-			case 1: // Down
-				// Check bounds
-				if ((currentTile - map_width * map_height / NUMBER_OF_FLOORS > 0) && tiles[currentTile - map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
-					hitbox.y -= MAP_HEIGHT / NUMBER_OF_FLOORS;
+						return true;
+					}
+					break;
+				case 1: // Down
+					// Check bounds
+					if ((currentTile - map_width * map_height / NUMBER_OF_FLOORS > 0) && tiles[currentTile - map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
+						hitbox.y -= MAP_HEIGHT / NUMBER_OF_FLOORS;
 
-					battery -= BATTERY_LOSS;
+						battery -= BATTERY_LOSS;
 
-					// Set sprite based on battery
-					if (battery == 0) sprite = 0;
-					else if (battery < 20) sprite = 1;
-					else if (battery < 50) sprite = 2;
+						// Set sprite based on battery
+						if (battery == 0) sprite = 0;
+						else if (battery < 20) sprite = 1;
+						else if (battery < 50) sprite = 2;
 
-					return true;
+						return true;
+					}
 				}
 			}
 		}
@@ -722,32 +772,36 @@ public:
 		return false;
 	}
 	bool submitItems(Tile* tiles[], int* itemList) {
+		bool success = false;
 		// If standing on a submission tile
-		if (tiles[getTile(tiles)]->getType() == 8) {
-			for (int j = 0; j < MAX_WEIGHT; j++) {
-				if (items[j] != 0) {
-					for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
-						if (itemList[i] != 0) {
-							if (items[j] == itemList[i]) {
-								// Submit the item
-								items[j] = 0;
-								itemList[i] = 0;
+		if (tiles[getTile(tiles)] != nullptr) {
+			if (tiles[getTile(tiles)]->getType() == 8) {
+				for (int j = 0; j < MAX_WEIGHT; j++) {
+					if (items[j] != 0) {
+						for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+							if (itemList[i] != 0) {
+								if (items[j] == itemList[i]) {
+									// Submit the item
+									items[j] = 0;
+									itemList[i] = 0;
+									weight -= items[j];
 
-								battery -= BATTERY_LOSS;
+									battery -= BATTERY_LOSS;
 
-								// Set sprite based on battery
-								if (battery == 0) sprite = 0;
-								else if (battery < 20) sprite = 1;
-								else if (battery < 50) sprite = 2;
+									// Set sprite based on battery
+									if (battery == 0) sprite = 0;
+									else if (battery < 20) sprite = 1;
+									else if (battery < 50) sprite = 2;
 
-								return true;
+									success = true;
+								}
 							}
 						}
 					}
 				}
 			}
 		}
-		return false;
+		return success;
 	}
 
 	double sight(Tile* tiles[], Tile* tileDatabase[]) {
@@ -767,14 +821,15 @@ public:
 			}
 
 			// Stop if this tile is a shelf
-			if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5) break;
+			if (tiles[currentTile] != nullptr) {
+				if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5 || tiles[currentTile]->getType() == 0) break;
+			}
 
 			// Stop if next tile is out of bounds
 			switch (dir) {
 			case 0: // Up
 				if (currentTile - map_width < 0) stop = true;
 				else if (tiles[currentTile - map_width] == nullptr) stop = true;
-				else if (tiles[currentTile - map_width]->getType() == 0) stop = true;
 
 				// Go to next tile
 				else currentTile -= map_width;
@@ -783,7 +838,6 @@ public:
 			case 1: // Down
 				if (currentTile + map_width >= map_width * map_height) stop = true;
 				else if (tiles[currentTile + map_width] == nullptr) stop = true;
-				else if (tiles[currentTile + map_width]->getType() == 0) stop = true;
 
 				// Go to next tile
 				else currentTile += map_width;
@@ -792,7 +846,6 @@ public:
 			case 2: // Left
 				if (currentTile % map_width == 0) stop = true;
 				else if (tiles[currentTile - 1] == nullptr) stop = true;
-				else if (tiles[currentTile - 1]->getType() == 0) stop = true;
 
 				// Go to next tile
 				else currentTile--;
@@ -801,7 +854,6 @@ public:
 			case 3: // Right
 				if (currentTile % map_width == map_width - 1) stop = true;
 				else if (tiles[currentTile + 1] == nullptr) stop = true;
-				else if (tiles[currentTile + 1]->getType() == 0) stop = true;
 
 				// Go to next tile
 				else currentTile++;
@@ -811,6 +863,11 @@ public:
 		}
 		return reward;
 	}
+	void updateHistory(Tile* tiles[]) {
+		int currentTile = getTile(tiles);
+
+		if (tiles[currentTile] != nullptr) visitHistory[currentTile]++;
+	}
 private:
 	SDL_FRect hitbox;
 	SDL_FRect weightBar;
@@ -819,6 +876,7 @@ private:
 	int dir; // 0: up, 1: down, 2: left, 3: right
 	int items[MAX_WEIGHT]; // the items being held by the robot
 	int weight; // the current weight of items that the robot is carrying
+	int visitHistory[MAX_TILES]; // How many times it has visited this tile
 };
 
 // Button class
@@ -912,18 +970,32 @@ private:
 
 // Node struct
 struct Node {
-	int action = 0;
 	std::vector<Node*> children;
 	Node* parent = nullptr;
-	int visits = 0;
+	double visits = 0;
 	double UCBval = 0.0;
 
 	// Game state
-	Tile* tiles[MAX_TILES] = { nullptr };
+	int action = 0;
+	Tile* tileDatabase[MAX_TILES] = { nullptr };
 	Robot* robots[MAX_ROBOTS] = { nullptr };
 	int itemList[ITEMS_TO_RETRIEVE] = { 0 };
 
-	Node(int setAction, Node* setParent = nullptr) {
+	Node(Tile* setTileDatabase[], Robot* setRobots[], int setItemList[], int setAction = 0, Node* setParent = nullptr) {
+		for (int i = 0; i < MAX_TILES; i++) {
+			if (setTileDatabase[i] != nullptr) {
+				tileDatabase[i] = setTileDatabase[i];
+			}
+		}
+
+		for (int i = 0; i < MAX_ROBOTS; i++) {
+			if (setRobots[i] != nullptr) {
+				robots[i] = setRobots[i];
+			}
+		}
+
+		for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) itemList[i] = setItemList[i];
+
 		action = setAction;
 		parent = setParent;
 	}
@@ -940,20 +1012,7 @@ struct Node {
 // MCTS
 class MCTS {
 public:
-	MCTS(Tile* tileSet[], Tile* tilesDatabaseSet[], Robot* robotsSet[], int itemsListSet[], int numOfSimulations, int robotNumber) {
-		for (int i = 0; i < MAX_TILES; i++) {
-			tiles[i] = tileSet[i];
-			tilesDatabase[i] = tilesDatabaseSet[i];
-		}
-
-		for (int i = 0; i < MAX_ROBOTS; i++) {
-			robots[i] = new Robot(robotsSet[i]->getBox().x, robotsSet[i]->getBox().y, 0, robotsSet[i]->getBattery(), robotsSet[i]->getItems());
-		}
-
-		for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
-			itemsList[i] = itemsListSet[i];
-		}
-
+	MCTS(int numOfSimulations, int robotNumber) {
 		numSim = numOfSimulations;
 		robotNum = robotNumber;
 	}
@@ -968,10 +1027,6 @@ public:
 		return bestChild(root);
 	}
 private:
-	Tile* tiles[MAX_TILES];
-	Tile* tilesDatabase[MAX_TILES];
-	Robot* robots[MAX_ROBOTS];
-	int itemsList[ITEMS_TO_RETRIEVE];
 	int numSim;
 	int robotNum;
 
@@ -985,38 +1040,61 @@ private:
 
 	// Expand the current node by generating all possible moves as child nodes
 	Node* expand(Node* node) {
+		// Save game state
+		float x = node->robots[robotNum]->getBox().x;
+		float y = node->robots[robotNum]->getBox().y;
+		int items[MAX_WEIGHT] = { 0 };
+		for (int i = 0; i < MAX_WEIGHT; i++) {
+			items[i] = node->robots[robotNum]->getItem(i);
+		}
+		int dir = node->robots[robotNum]->getDir();
+		int itemList[MAX_WEIGHT] = { 0 };
+		for (int i = 0; i < MAX_WEIGHT; i++) {
+			itemList[i] = node->itemList[i];
+		}
+		float battery = node->robots[robotNum]->getBattery();
+
 		for (int i = 0; i < 11; i++) {
 			bool success = false;
 
 			if (i >= 0 && i <= 3) {
-				success = robots[robotNum]->turn(i);
+				success = node->robots[robotNum]->turn(i);
 			}
 			if (i == 4) {
-				success = robots[robotNum]->move(tiles, robots);
+				success = node->robots[robotNum]->move(node->tileDatabase, node->robots);
 			}
 			if (i == 5) {
-				success = robots[robotNum]->takeShelfItem(tiles);
+				success = node->robots[robotNum]->takeShelfItem(node->tileDatabase);
 			}
 			if (i == 6) {
-				success = robots[robotNum]->charge(tiles);
+				success = node->robots[robotNum]->charge(node->tileDatabase);
 			}
 			if (i >= 7 && i <= 8) {
-				success = robots[robotNum]->useElevator(tiles, i - 7);
+				success = node->robots[robotNum]->useElevator(node->tileDatabase, i - 7);
 			}
 			/*if (i >= 12 && i <= 51) {
 				success = robots[robotNum]->passItem(robots, tiles, (i - 12) % 10 + 1);
 			}*/
 			if (i == 9) {
-				success = robots[robotNum]->submitItems(tiles, itemsList);
+				success = node->robots[robotNum]->submitItems(node->tileDatabase, node->itemList);
 			}
 			if (i == 10) {
 				success = true; // Do nothing
 			}
 
 			if (success) {
-				Node* child = new Node(i, node);
+				Node* child = new Node(node->tileDatabase, node->robots, node->itemList, i, node);
 				node->children.push_back(child);
 			}
+
+			// Reset this node's game state
+			node->robots[robotNum]->setXY(x, y);
+			node->robots[robotNum]->setItems(items);
+			node->robots[robotNum]->setDir(dir);
+			for (int j = 0; j < MAX_WEIGHT; j++) {
+				node->itemList[j] = itemList[j];
+			}
+			node->robots[robotNum]->setBattery(battery);
 		}
 		return node->children[std::rand() % node->children.size()]; // Return a random child node for simulate step
 	}
@@ -1026,56 +1104,70 @@ private:
 		double reward = 0;
 		int ticks = 0;
 		float goalX = 0; float goalY = 0;
-		float x = 0; float y = 0;
+		float currentX = 0; float currentY = 0;
 		double minDistanceFromGoal = std::numeric_limits<double>::infinity();
 		double distance = 0;
+
+		// Save game state
+		float x = node->robots[robotNum]->getBox().x;
+		float y = node->robots[robotNum]->getBox().y;
+		int items[MAX_WEIGHT] = { 0 };
+		for (int i = 0; i < MAX_WEIGHT; i++) {
+			items[i] = node->robots[robotNum]->getItem(i);
+		}
+		int dir = node->robots[robotNum]->getDir();
+		int itemList[MAX_WEIGHT] = { 0 };
+		for (int i = 0; i < MAX_WEIGHT; i++) {
+			itemList[i] = node->itemList[i];
+		}
+		float battery = node->robots[robotNum]->getBattery();
 
 		// Simulation
 		bool stop = false;
 		while (!stop) {
-			int action = node->action;
-			//if (ticks > 0) action = rand() % 11;
+			int action = rand() % 11;
 
 			bool success = false;
 
 			if (action >= 0 && action <= 3) {
-				success = robots[robotNum]->turn(action);
+				success = node->robots[robotNum]->turn(action);
 			}
 			if (action == 4) {
-				success = robots[robotNum]->move(tiles, robots);
+				success = node->robots[robotNum]->move(node->tileDatabase, node->robots);
+				if (success) reward += 1;
 			}
 			if (action == 5) {
-				success = robots[robotNum]->takeShelfItem(tiles);
+				success = node->robots[robotNum]->takeShelfItem(node->tileDatabase);
 			}
 			if (action == 6) {
-				success = robots[robotNum]->charge(tiles);
+				success = node->robots[robotNum]->charge(node->tileDatabase);
 			}
 			if (action >= 7 && action <= 8) {
-				success = robots[robotNum]->useElevator(tiles, action - 7);
+				success = node->robots[robotNum]->useElevator(node->tileDatabase, action - 7);
 			}
 			/*if (action >= 12 && action <= 51) {
 				success = robots[robotNum]->passItem(robots, tiles, (action - 12) % 10 + 1);
 			}*/
 			if (action == 9) {
-				success = robots[robotNum]->submitItems(tiles, itemsList);
-				if (success) reward += 10;
+				success = node->robots[robotNum]->submitItems(node->tileDatabase, node->itemList);
+				//if (success) reward += 100;
 			}
 			if (action == 10) {
 				success = true; // Do nothing
 			}
 
-			// Penalty for illegal move
+			// Break if illegal move
 			if (!success) break;
 
-			reward += robots[robotNum]->sight(tiles, tilesDatabase);
+			// Increment ticks
 			ticks++;
 
 			minDistanceFromGoal = std::numeric_limits<double>::infinity();
-			if (robots[robotNum]->getWeight() >= 0) {
+			if (node->robots[robotNum]->getWeight() >= 0) {
 				for (int i = 0; i < MAX_TILES; i++) {
-					if (tiles[i] != nullptr) {
-						if (tiles[i]->getType() == 8) {
-							distance = std::sqrt(pow(x - tiles[i]->getX(), 2) + pow(y - tiles[i]->getY(), 2));
+					if (node->tileDatabase[i] != nullptr) {
+						if (node->tileDatabase[i]->getType() == 8) {
+							distance = std::sqrt(pow(currentX - node->tileDatabase[i]->getX(), 2) + pow(currentY - node->tileDatabase[i]->getY(), 2));
 
 							// Save minimum distance
 							if (distance < minDistanceFromGoal) {
@@ -1086,18 +1178,28 @@ private:
 				}
 			}
 			//reward -= ticks;
-			reward -= minDistanceFromGoal;
+			if (minDistanceFromGoal < std::numeric_limits<double>::infinity()) reward -= minDistanceFromGoal;
 
 			// Check for termination criteria
 			stop = true;
 			for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
-				if (itemsList[i] != 0) {
+				if (itemList[i] != 0) {
 					stop = false;
 					break;
 				}
 			}
-			if (ticks >= 10) stop = true;
+			// Stop at a certain number of ticks into the simulation
+			if (ticks >= 50) stop = true;
 		}
+
+		// Reset this node's game state
+		node->robots[robotNum]->setXY(x, y);
+		node->robots[robotNum]->setItems(items);
+		node->robots[robotNum]->setDir(dir);
+		for (int j = 0; j < MAX_WEIGHT; j++) {
+			node->itemList[j] = itemList[j];
+		}
+		node->robots[robotNum]->setBattery(battery);
 
 		return reward;
 	}
@@ -1117,8 +1219,8 @@ private:
 		double bestValue = -std::numeric_limits<double>::infinity();
 
 		for (Node* child : node->children) {
-			double uctValue = child->UCBval / (child->visits + 1e-6) + 0 *
-				std::sqrt(std::log(node->visits + 1) / (child->visits + 1e-6));
+			double uctValue = child->UCBval / (child->visits) + 0.5 *
+				std::sqrt(2.0 * std::log(node->visits) / (child->visits));
 			if (uctValue > bestValue) {
 				bestValue = uctValue;
 				best = child;
@@ -1133,7 +1235,7 @@ private:
 		double bestValue = -std::numeric_limits<double>::infinity();
 
 		for (Node* child : node->children) {
-			double value = child->UCBval / (child->visits + 1e-6); // Calculate average reward
+			double value = child->UCBval / (child->visits); // Calculate average reward
 			if (value > bestValue) {
 				bestValue = value;
 				best = child;
@@ -1280,12 +1382,6 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 
 // Just function declarations
 void simulation();
-void train();
-
-// Results screen
-void results(int ticks) {
-
-}
 
 // Main menu
 void menu() {
@@ -1361,12 +1457,6 @@ void menu() {
 	}
 
 	if (startSimulation) simulation();
-	else if (startTraining) train();
-}
-
-// Training code
-void train() {
-
 }
 
 // Main simulation code
@@ -1496,36 +1586,237 @@ void simulation() {
 			if (!pause) {
 				// Process robots
 				if (SDL_GetTicks64() - lastTick > TICK_INTERVAL) {
+					bool movementBlocked[MAX_ROBOTS] = { false };
 					for (int i = 0; i < MAX_ROBOTS; i++) {
 						if (robots[i] != nullptr) {
-							/*Node* root = new Node(0);
-							MCTS mcts(tiles, tileDatabase, robots, itemList, 100, i);
+							float goalX = 0;
+							float goalY = 0;
+							double distance = std::numeric_limits<double>::infinity();
+							int takeDir = -1;
+							bool findShelf = false;
+							bool explore = false;
+							bool findExit = false;
+							bool takeItemFromShelf = false;
+							bool findCharger = false;
+							bool chargeBattery = false;
+							bool submit = false;
+
+							// Find smallest item in itemList
+							int smallestItem = 11;
+							for (int j = 0; j < ITEMS_TO_RETRIEVE; j++) {
+								if (itemList[j] < smallestItem && itemList[j] > 0) {
+									smallestItem = itemList[j];
+									if (itemList[j] == 1) break;
+								}
+							}
+
+							// Charge until 100 if already charging
+							if (!(chargeBattery && robots[i]->getBattery() < 100)) {
+								chargeBattery = false;
+
+								// If robot is low on battery
+								if (robots[i]->getBattery() < 25) {
+									// Look for the closest battery charger
+									for (int j = 0; j < MAX_TILES; j++) {
+										if (tileDatabase[j] != nullptr) {
+											if (tileDatabase[j]->getType() == 6) {
+												if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+													goalX = tileDatabase[j]->getX();
+													goalY = tileDatabase[j]->getY();
+													distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+													findCharger = true;
+
+													if (distance == 0) chargeBattery = true;
+												}
+											}
+										}
+									}
+									if (!findCharger) explore = true;
+								}
+								// If robot still has space for an item
+								else if (robots[i]->getWeight() + smallestItem < MAX_WEIGHT) {
+									// Look for the closest shelf with an item in itemList
+									for (int j = 0; j < MAX_TILES; j++) {
+										if (tileDatabase[j] != nullptr) {
+											if (tileDatabase[j]->getType() >= 2 && tileDatabase[j]->getType() <= 5) {
+												for (int k = 0; k < ITEMS_TO_RETRIEVE; k++) {
+													if (tileDatabase[j]->getItem() == itemList[k]) {
+														switch (tileDatabase[j]->getType()) {
+														case 2:
+															if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - WH - robots[i]->getBox().y, 2)) < distance) {
+																goalX = tileDatabase[j]->getX();
+																goalY = tileDatabase[j]->getY() - WH;
+																distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+																takeDir = 1;
+															}
+															break;
+														case 3:
+															if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() + WH - robots[i]->getBox().y, 2)) < distance) {
+																goalX = tileDatabase[j]->getX();
+																goalY = tileDatabase[j]->getY() + WH;
+																distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+																takeDir = 0;
+															}
+															break;
+														case 4:
+															if (std::sqrt(pow(tileDatabase[j]->getX() - WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+																goalX = tileDatabase[j]->getX() - WH;
+																goalY = tileDatabase[j]->getY();
+																distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+																takeDir = 3;
+															}
+															break;
+														case 5:
+															if (std::sqrt(pow(tileDatabase[j]->getX() + WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+																goalX = tileDatabase[j]->getX() + WH;
+																goalY = tileDatabase[j]->getY();
+																distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+																takeDir = 2;
+															}
+															break;
+														}
+														findShelf = true;
+													}
+												}
+												if (distance == 0 && robots[i]->getWeight() + tileDatabase[j]->getItem() < MAX_WEIGHT) {
+													takeItemFromShelf = true;
+													break;
+												}
+											}
+										}
+									}
+									// If no known shelf with an item in itemList exists, explore
+									if (!findShelf) explore = true;
+								}
+								else {
+									// Look for closest exit
+									for (int j = 0; j < MAX_TILES; j++) {
+										if (tileDatabase[j] != nullptr) {
+											if (tileDatabase[j]->getType() == 8) {
+												if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+													goalX = tileDatabase[j]->getX();
+													goalY = tileDatabase[j]->getY();
+													distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+													findExit = true;
+
+													if (distance < WH) submit = true;
+												}
+											}
+										}
+									}
+									// If no known exit in database, explore
+									if (!findExit) explore = true;
+								}
+							}
+
+							// Exploration
+							if (explore) {
+								// Look for the nearest unknown tile
+								for (int j = 0; j < MAX_TILES; j++) {
+									if (tileDatabase[j] == nullptr) {
+										if (std::sqrt(pow(tiles[j]->getX() - robots[i]->getBox().x, 2) + pow(tiles[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+											goalX = tiles[j]->getX();
+											goalY = tiles[j]->getY();
+											distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+										}
+									}
+								}
+							}
+							
+							// Calculate f(n) = g(n) + h(n)
+							double f[4] = { 0 };
+
+							// where g(n) = visit history
+							int currentTile = robots[i]->getTile(tileDatabase);
+
+							f[0] += (double)(robots[i]->getHistory(currentTile - MAP_WIDTH / WH));
+							f[1] += (double)(robots[i]->getHistory(currentTile + MAP_WIDTH / WH));
+							f[2] += (double)(robots[i]->getHistory(currentTile - 1));
+							f[3] += (double)(robots[i]->getHistory(currentTile + 1));
+
+							// h(n) = Euclidean distance from goal
+							f[0] -= std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y - WH, 2)); // Up
+							f[1] -= std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y + WH, 2)); // Down
+							f[2] -= std::sqrt(pow(goalX - robots[i]->getBox().x - WH, 2) + pow(goalY - robots[i]->getBox().y, 2)); // Left
+							f[3] -= std::sqrt(pow(goalX - robots[i]->getBox().x + WH, 2) + pow(goalY - robots[i]->getBox().y, 2)); // Right
+
+							// Check that that movement is not a blocked tile
+							for (int j = 0; j < MAX_TILES; j++) {
+								if (tileDatabase[j] != nullptr) {
+									if (tileDatabase[j]->getType() != 1 && (tileDatabase[j]->getType() < 6 || tileDatabase[j]->getType() > 8)) {
+										if (tileDatabase[j]->getX() == robots[i]->getBox().x) {
+											if (tileDatabase[j]->getY() == robots[i]->getBox().y - WH) f[0] = std::numeric_limits<double>::infinity();
+											else if (tileDatabase[j]->getY() == robots[i]->getBox().y + WH) f[1] = std::numeric_limits<double>::infinity();
+										}
+										else if (tileDatabase[j]->getY() == robots[i]->getBox().y) {
+											if (tileDatabase[j]->getX() == robots[i]->getBox().x - WH) f[2] = std::numeric_limits<double>::infinity();
+											else if (tileDatabase[j]->getX() == robots[i]->getBox().x + WH) f[3] = std::numeric_limits<double>::infinity();
+										}
+									}
+								}
+							}
+							for (int j = 0; j < MAX_ROBOTS; j++) {
+								if (robots[j] != nullptr) {
+									if (robots[j]->getBox().x == robots[i]->getBox().x) {
+										if (robots[j]->getBox().y == robots[i]->getBox().y - WH) f[0] = std::numeric_limits<double>::infinity();
+										else if (robots[j]->getBox().y == robots[i]->getBox().y + WH) f[1] = std::numeric_limits<double>::infinity();
+									}
+									else if (robots[j]->getBox().y == robots[i]->getBox().y) {
+										if (robots[j]->getBox().x == robots[i]->getBox().x - WH) f[2] = std::numeric_limits<double>::infinity();
+										else if (robots[j]->getBox().x == robots[i]->getBox().x + WH) f[3] = std::numeric_limits<double>::infinity();
+									}
+								}
+							}
+							
+							// Choose minimum f(n)
+							int bestAction = 0;
+							for (int j = 1; j < 4; j++) {
+								if (f[j] < f[bestAction]) {
+									bestAction = j;
+								}
+							}
+
+							// Decide action
+							if (submit) robots[i]->submitItems(tileDatabase, itemList);
+							else if (chargeBattery) robots[i]->charge(tileDatabase);
+							else if (takeItemFromShelf) {
+								// Turn to shelf if not already facing it
+								if (robots[i]->getDir() != takeDir) robots[i]->turn(takeDir);
+								// Take item from shelf
+								else robots[i]->takeShelfItem(tiles);
+							}
+							// Turn to direction if not already facing it
+							else if (robots[i]->getDir() != bestAction) robots[i]->turn(bestAction);
+							// Move
+							else robots[i]->move(tiles, robots);
+
+							/*Node* root = new Node(tileDatabase, robots, itemList);
+							MCTS mcts(50, i);
 							Node* best = mcts.run(root);
 							int action = best->action;*/
 
-							int action = rand() % 11;
-
-							if (action >= 0 && action <= 3) {
-								robots[i]->turn(action);
-							}
-							if (action == 4) {
-								robots[i]->move(tiles, robots);
-							}
-							if (action == 5) {
-								robots[i]->takeShelfItem(tiles);
-							}
-							if (action == 6) {
-								robots[i]->charge(tiles);
-							}
-							if (action >= 7 && action <= 8) {
-								robots[i]->useElevator(tiles, action - 7);
-							}
-							/*if (action >= 12 && action <= 51) {
-								robots[i]->passItem(robots, tiles, (action - 12) % 10 + 1);
-							}*/
-							if (action == 9) {
-								robots[i]->submitItems(tiles, itemList);
-							}
+							//// Process action
+							//if (action >= 0 && action <= 3) {
+							//	robots[i]->turn(action);
+							//}
+							//if (action == 4) {
+							//	robots[i]->move(tiles, robots);
+							//}
+							//if (action == 5) {
+							//	robots[i]->takeShelfItem(tiles);
+							//}
+							//if (action == 6) {
+							//	robots[i]->charge(tiles);
+							//}
+							//if (action >= 7 && action <= 8) {
+							//	robots[i]->useElevator(tiles, action - 7);
+							//}
+							///*if (action >= 12 && action <= 51) {
+							//	robots[i]->passItem(robots, tiles, (action - 12) % 10 + 1);
+							//}*/
+							//if (action == 9) {
+							//	robots[i]->submitItems(tiles, itemList);
+							//}
 
 							robots[i]->sight(tiles, tileDatabase);
 
@@ -1615,6 +1906,10 @@ void simulation() {
 
 	if (returnMenu) menu();
 	else if (finishSimulation) {
+		for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+			if (itemList[i] == 0) itemsRetrieved++;
+		}
+
 		printf("Total Ticks: %d\n", ticks);
 		if (itemsRetrieved > 0) printf("Average ticks per item: %f\n", (float)(ticks / itemsRetrieved));
 		printf("Items retrieved: %d\n", itemsRetrieved);
