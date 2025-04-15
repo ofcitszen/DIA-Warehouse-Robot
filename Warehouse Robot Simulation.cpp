@@ -1293,7 +1293,7 @@ void simulation() {
 	bool finishSimulation = false;
 
 	// Create tiles based on map
-	if (!setTiles(tiles, "warehouse_resources/map1.map", MAP_WIDTH, MAP_HEIGHT)) printf("setTiles() error\n");
+	if (!setTiles(tiles, "warehouse_resources/map4.map", MAP_WIDTH, MAP_HEIGHT)) printf("setTiles() error\n");
 	else {
 		// in tileDatabase, set all black tiles (type 0)
 		for (int i = 0; i < MAX_TILES; i++) {
