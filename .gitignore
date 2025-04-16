@@ -4,3 +4,4 @@
 *.sln
 .vs/
 DIA SDL CW1/
+*.pdb
