@@ -13,7 +13,7 @@ int SCREEN_HEIGHT = 720;
 float SCREEN_SCALE = 1.5;
 
 // Number of items to be retrieved
-constexpr int ITEMS_TO_RETRIEVE = 100;
+constexpr int ITEMS_TO_RETRIEVE = 1000;
 
 // Number of floors
 constexpr int NUMBER_OF_FLOORS = 1;
@@ -31,7 +31,7 @@ int MAP_HEIGHT = 50 * WH;
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
-constexpr int MAX_ROBOTS = 50;
+constexpr int MAX_ROBOTS = 10;
 // Robot battery loss per tick of movement
 float BATTERY_LOSS = (float)0.2;
 // Robot battery gain per tick of charging
@@ -50,7 +50,7 @@ Uint64 TICK_INTERVAL = 0;
 // Obstacle-generating cooldown in number of ticks
 constexpr int OBSTACLE_CD = 100;
 // Number of obstacles at a time
-constexpr int MAX_OBSTACLES = 100;
+constexpr int MAX_OBSTACLES = 50;
 
 // Initialise window and renderer
 SDL_Window* window;
@@ -215,7 +215,7 @@ void renderTitle(std::string text, float x, float y, bool center = false, bool s
 		x -= (float)textTexture.getWidth() / 2;
 		y -= (float)textTexture.getHeight() / (float)2.5;
 	}
-	
+
 	// Render text shadow if required
 	if (shadow) {
 		textTexture.loadText(text, pixellari_title, { 0, 0, 0, 255 });
@@ -230,28 +230,17 @@ void renderTitle(std::string text, float x, float y, bool center = false, bool s
 // Tile class
 class Tile {
 public:
-	Tile(float x, float y, int setType) {
+	Tile(float x, float y, int setType = -1, int setItem = -1) {
 		hitbox = { x, y, WH, WH };
 		type = setType;
-		
-		if (type >= 2 && type <= 5) {
-			item = rand() % 10 + 1;
-		}
+
+		if (type >= 2 && type <= 5) item = setItem;
 		else item = -1;
 	}
 	void render(SDL_FRect& camera) {
-		if (type != 0) {
+		if (type > 0) {
 			if (SDL_HasIntersectionF(&hitbox, &camera)) {
 				tilesTexture.render(hitbox.x - camera.x, hitbox.y - camera.y, &tilesTextureClips[type - 1]);
-
-				// If shelf tile, show item contained in it
-				//if (type >= 2 && type <= 5) {
-				//	// Load text to get its dimensions
-				//	textTexture.loadText(std::to_string(item), pixellari);
-
-				//	// Render text in the center of the shelf
-				//	renderText(std::to_string(item), (float)hitbox.x + (float)hitbox.w / 2 - camera.x * SCREEN_SCALE, (float)hitbox.y + (float)hitbox.h / 2 - camera.y * SCREEN_SCALE, true, true);
-				//}
 			}
 		}
 	}
@@ -272,15 +261,18 @@ public:
 	int getItem() {
 		return item;
 	}
-	
+
 	// Set functions
 	void setTileType(int setType) {
 		type = setType;
 	}
+	void setItem(int setShelfItem) {
+		item = setShelfItem;
+	}
 private:
 	SDL_FRect hitbox;
 	int type;
-	int item;	// Item held by shelves; 0 if no item or not a shelf
+	int item;	// Item held by shelves; -1 if no item or not a shelf
 };
 
 // Robot class
@@ -371,7 +363,7 @@ public:
 				weight += item;
 				break;
 			}
-		}		
+		}
 	}
 
 	// Set functions
@@ -415,7 +407,7 @@ public:
 		bool success = true;
 		bool elevator = false;
 
-		if (battery > 0 && weight <= MAX_WEIGHT) {			
+		if (battery > 0 && weight <= MAX_WEIGHT) {
 			// Move robot
 			switch (dir) {
 			case 0: hitbox.y -= WH; break;
@@ -451,7 +443,7 @@ public:
 						if (robots[i] != nullptr) {
 							SDL_FRect robotHitbox = robots[i]->getBox();
 							SDL_FRect selfHitbox = hitbox;
-							
+
 							// Check all floors for elevator
 							if (elevator) {
 								robotHitbox.y = (float)((int)robotHitbox.y % (MAP_HEIGHT / NUMBER_OF_FLOORS));
@@ -493,7 +485,7 @@ public:
 			}
 		}
 		else success = false;
-		
+
 		// Returns true if moved successfully
 		return success;
 	}
@@ -851,7 +843,7 @@ public:
 								weight -= items[j];
 								items[j] = 0;
 								itemList[i] = 0;
-								
+
 								success = true;
 							}
 						}
@@ -881,18 +873,16 @@ public:
 
 		bool stop = false;
 		for (int i = 0; i < sightRange && !stop; i++) {
-			// Record tile in database if database's slot for that tile was empty
-			if (tileDatabase[currentTile] == nullptr) tileDatabase[currentTile] = tiles[currentTile];
-			
-			if (tiles[currentTile] != nullptr) {
-				// Also record tile if it is different from what is known
-				if (tiles[currentTile]->getType() != tileDatabase[currentTile]->getType()) tileDatabase[currentTile] = tiles[currentTile];
-
-				// Stop sight if this tile is a shelf
-				if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5 || tiles[currentTile]->getType() == 0) break;
+			// Record tile in database
+			if (tileDatabase[currentTile] != nullptr) {
+				tileDatabase[currentTile]->setTileType(tiles[currentTile]->getType());
+				tileDatabase[currentTile]->setItem(tiles[currentTile]->getItem());
 			}
 
-			// Stop if next tile is out of bounds
+			// Stop sight if this tile is a shelf or wall
+			if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5 || tiles[currentTile]->getType() == 0) break;
+
+			// Stop sight if next tile is out of bounds
 			switch (dir) {
 			case 0: // Up
 				if (currentTile - map_width < 0) stop = true;
@@ -900,7 +890,7 @@ public:
 
 				// Go to next tile
 				else currentTile -= map_width;
-				
+
 				break;
 			case 1: // Down
 				if (currentTile + map_width >= map_width * map_height) stop = true;
@@ -908,7 +898,7 @@ public:
 
 				// Go to next tile
 				else currentTile += map_width;
-				
+
 				break;
 			case 2: // Left
 				if (currentTile % map_width == 0) stop = true;
@@ -916,7 +906,7 @@ public:
 
 				// Go to next tile
 				else currentTile--;
-				
+
 				break;
 			case 3: // Right
 				if (currentTile % map_width == map_width - 1) stop = true;
@@ -924,7 +914,7 @@ public:
 
 				// Go to next tile
 				else currentTile++;
-				
+
 				break;
 			}
 		}
@@ -1127,11 +1117,12 @@ void closeSDL() {
 }
 
 // Converts a map file into an array of tiles
-bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
+bool setTiles(Tile* tiles[], Tile* tileDatabase[], std::string mapFile, int mapWidth, int mapHeight) {
 	bool success = true;
 	float x = 0, y = 0;
 	MAP_WIDTH = mapWidth;
 	MAP_HEIGHT = mapHeight;
+	int numberOfShelves = 0;
 
 	// Load map file
 	std::ifstream map(mapFile.c_str());
@@ -1150,9 +1141,20 @@ bool setTiles(Tile* tiles[], std::string mapFile, int mapWidth, int mapHeight) {
 				break;
 			}
 
-			// Create tile
+			// Create tiles
 			if ((tileType >= 0) && (tileType <= TILE_SPRITES)) {
-				tiles[i] = new Tile(x, y, tileType);
+				// Set the first 10 shelves to have items 1 to 10. Remaining shelves have random items.
+				if (tileType >= 2 && tileType <= 5) {
+					if (numberOfShelves < 10) {
+						tiles[i] = new Tile(x, y, tileType, numberOfShelves + 1);
+						numberOfShelves++;
+					}
+					else tiles[i] = new Tile(x, y, tileType, rand() % 10 + 1);
+				}
+				else tiles[i] = new Tile(x, y, tileType);
+
+				// Create tile in tileDatabase
+				tileDatabase[i] = new Tile(x, y);
 			}
 			else {
 				printf("Invalid tile type at %d\n", i);
@@ -1185,11 +1187,10 @@ void menu() {
 	// Initialise buttons
 	Button* buttons[MAX_BUTTONS] = { nullptr };
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Train");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Settings");
-	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
-	buttons[4] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
-	buttons[4]->setShown();
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 1 * 150, "Settings");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
+	buttons[3]->setShown();
 
 	// Main loop
 	bool quit = false;
@@ -1201,33 +1202,27 @@ void menu() {
 		while (SDL_PollEvent(&e) != 0) {
 			// The close button
 			if (e.type == SDL_QUIT) quit = true;
-			
+
 			// Start button
 			if (buttons[0]->isShown() && buttons[0]->handleEvents(e)) {
 				quit = true;
 				startSimulation = true;
 			}
 
-			// Start button
-			if (buttons[1]->isShown() && buttons[1]->handleEvents(e)) {
-				quit = true;
-				startTraining = true;
-			}
-
 			// Settings button and Back button
-			if (buttons[2]->isShown() && buttons[2]->handleEvents(e) || buttons[4]->isShown() && buttons[4]->handleEvents(e)) {
+			if (buttons[1]->isShown() && buttons[1]->handleEvents(e) || buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
 				changeSettings = !changeSettings;
-				for (int i = 0; i < 5; i++) buttons[i]->setShown();
+				for (int i = 0; i < 4; i++) buttons[i]->setShown();
 			}
 
 			// Quit button
-			if (buttons[3]->isShown() && buttons[3]->handleEvents(e)) quit = true;
+			if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) quit = true;
 		}
 
 		// Reset screen
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 		SDL_RenderClear(renderer);
-		
+
 		// Render title
 		if (!changeSettings) renderTitle("Warehouse Robot Simulation", (float)SCREEN_WIDTH / 2, 300, true);
 		else renderTitle("Settings", (float)SCREEN_WIDTH / 2, 150, true);
@@ -1272,17 +1267,16 @@ void simulation() {
 	Robot* robots[MAX_ROBOTS] = { nullptr };
 	Button* buttons[MAX_BUTTONS] = { nullptr };
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Resume");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Menu");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Finish");
-	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
-	for (int i = 0; i < 4; i++) buttons[i]->setShown();
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Finish");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
+	for (int i = 0; i < 3; i++) buttons[i]->setShown();
 
 	// Random seed
 	srand((unsigned int)time(0));
 
 	// List of items to retrieve
-	int itemList[ITEMS_TO_RETRIEVE] = {0};
-	int predItemList[ITEMS_TO_RETRIEVE] = {0};
+	int itemList[ITEMS_TO_RETRIEVE] = { 0 };
+	int predItemList[ITEMS_TO_RETRIEVE] = { 0 };
 	for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
 		itemList[i] = rand() % 10 + 1;
 		predItemList[i] = itemList[i];
@@ -1293,7 +1287,7 @@ void simulation() {
 	bool finishSimulation = false;
 
 	// Create tiles based on map
-	if (!setTiles(tiles, "warehouse_resources/map4.map", MAP_WIDTH, MAP_HEIGHT)) printf("setTiles() error\n");
+	if (!setTiles(tiles, tileDatabase, "warehouse_resources/map1.map", MAP_WIDTH, MAP_HEIGHT)) printf("setTiles() error\n");
 	else {
 		// in tileDatabase, set all black tiles (type 0)
 		for (int i = 0; i < MAX_TILES; i++) {
@@ -1331,6 +1325,7 @@ void simulation() {
 
 		bool receivingItem[MAX_ROBOTS] = { false }; // 0: not receiving item, 1: receiving item (stay still), 2: time to reset this to 0
 		int numberOfPassedItems = 0;
+		bool chargerKnown = false;
 
 		// Main loop
 		bool quit = false;
@@ -1347,17 +1342,17 @@ void simulation() {
 
 				else if (e.type == SDL_KEYDOWN && e.key.repeat == 0) {
 					switch (e.key.keysym.sym) {
-					// Pause by pressing ESC
-					case SDLK_ESCAPE: 
+						// Pause by pressing ESC
+					case SDLK_ESCAPE:
 						pause = !pause;
-						for (int i = 0; i < 4; i++) buttons[i]->setShown();
+						for (int i = 0; i < 3; i++) buttons[i]->setShown();
 						break;
-					// Move camera using arrow keys
+						// Move camera using arrow keys
 					case SDLK_UP: camVelY -= camSpd; break;
 					case SDLK_DOWN: camVelY += camSpd; break;
 					case SDLK_LEFT: camVelX -= camSpd; break;
 					case SDLK_RIGHT: camVelX += camSpd; break;
-					// Zoom
+						// Zoom
 					case SDLK_w: // Out
 						if (SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5;
 						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
@@ -1372,7 +1367,7 @@ void simulation() {
 						SCREEN_SCALE = 3;
 						camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
 						break;
-					// Switch between real layout and robots' knowledge of the layout
+						// Switch between real layout and robots' knowledge of the layout
 					case SDLK_TAB: view = !view; break;
 					}
 				}
@@ -1389,23 +1384,17 @@ void simulation() {
 				// Resume button
 				if (buttons[0]->isShown() && buttons[0]->handleEvents(e)) {
 					pause = !pause;
-					for (int i = 0; i < 4; i++) buttons[i]->setShown();
-				}
-
-				// Menu button
-				if (buttons[1]->isShown() && buttons[1]->handleEvents(e)) {
-					quit = true;
-					returnMenu = true;
+					for (int i = 0; i < 3; i++) buttons[i]->setShown();
 				}
 
 				// Finish button
-				if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) {
+				if (buttons[1]->isShown() && buttons[1]->handleEvents(e)) {
 					quit = true;
 					finishSimulation = true;
 				}
 
 				// Quit button
-				if (buttons[3]->isShown() && buttons[3]->handleEvents(e)) quit = true;
+				if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) quit = true;
 			}
 
 			if (!pause) {
@@ -1454,6 +1443,7 @@ void simulation() {
 							bool findExit = false;
 							bool takeItemFromShelf = false;
 							bool findCharger = false;
+							bool waitingForCharger = false;
 							bool chargeBattery = false;
 							bool submit = false;
 							bool passItemAway = false;
@@ -1480,7 +1470,7 @@ void simulation() {
 								}
 								if (!chargeBattery) {
 									// If robot is low on battery
-									if (robots[i]->getBattery() < 25) {
+									if (robots[i]->getBattery() < 35 || !chargerKnown) {
 										// Look for the closest battery charger
 										for (int j = 0; j < MAX_TILES; j++) {
 											if (tileDatabase[j] != nullptr) {
@@ -1490,8 +1480,20 @@ void simulation() {
 														goalY = tileDatabase[j]->getY();
 														distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 														findCharger = true;
+														chargerKnown = true;
 
-														if (distance == 0) chargeBattery = true;
+														// Check if some other robot is already on that charger
+														if (distance <= WH * MAX_ROBOTS) {
+															for (int k = 0; k < MAX_ROBOTS; k++) {
+																if (robots[k] != nullptr) {
+																	if (robots[k]->getBox().x == goalX && robots[k]->getBox().y == goalY) {
+																		waitingForCharger = true;
+																		break;
+																	}
+																}
+															}
+														}
+														else if (distance == 0) chargeBattery = true;
 													}
 												}
 											}
@@ -1579,16 +1581,18 @@ void simulation() {
 							if (explore) {
 								// Look for the nearest unknown tile
 								for (int j = 0; j < MAX_TILES; j++) {
-									if (tileDatabase[j] == nullptr) {
-										if (std::sqrt(pow(tiles[j]->getX() - robots[i]->getBox().x, 2) + pow(tiles[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
-											goalX = tiles[j]->getX();
-											goalY = tiles[j]->getY();
-											distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+									if (tileDatabase[j] != nullptr) {
+										if (tileDatabase[j]->getType() == -1) {
+											if (std::sqrt(pow(tiles[j]->getX() - robots[i]->getBox().x, 2) + pow(tiles[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+												goalX = tiles[j]->getX();
+												goalY = tiles[j]->getY();
+												distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+											}
 										}
 									}
 								}
 							}
-							
+
 							// Calculate f(n) = g(n) + h(n)
 							double f[4] = { 0 };
 
@@ -1610,7 +1614,8 @@ void simulation() {
 							// Check that robot is not moving to a blocked tile
 							for (int j = 0; j < MAX_TILES; j++) {
 								if (tileDatabase[j] != nullptr) {
-									if (tileDatabase[j]->getType() != 1 && (tileDatabase[j]->getType() < 6 || tileDatabase[j]->getType() > 8)) {
+									// Check if adjacent tile type is walkable tile type
+									if (tileDatabase[j]->getType() != -1 && tileDatabase[j]->getType() != 1 && (tileDatabase[j]->getType() < 6 || tileDatabase[j]->getType() > 8)) {
 										if (tileDatabase[j]->getX() == robots[i]->getBox().x) {
 											if (tileDatabase[j]->getY() == robots[i]->getBox().y - WH) f[0] = std::numeric_limits<double>::infinity();
 											else if (tileDatabase[j]->getY() == robots[i]->getBox().y + WH) f[1] = std::numeric_limits<double>::infinity();
@@ -1620,6 +1625,12 @@ void simulation() {
 											else if (tileDatabase[j]->getX() == robots[i]->getBox().x + WH) f[3] = std::numeric_limits<double>::infinity();
 										}
 									}
+
+									// Check if robot is at the edge of the map
+									if (robots[i]->getBox().x == 0) f[2] = std::numeric_limits<double>::infinity();
+									if (robots[i]->getBox().x == MAP_WIDTH - WH) f[3] = std::numeric_limits<double>::infinity();
+									if (robots[i]->getBox().y == 0) f[0] = std::numeric_limits<double>::infinity();
+									if (robots[i]->getBox().y == MAP_HEIGHT - WH) f[1] = std::numeric_limits<double>::infinity();
 								}
 							}
 
@@ -1718,7 +1729,7 @@ void simulation() {
 									}
 								}
 							}
-							
+
 							// Choose minimum f(n)
 							bestAction = 0;
 							for (int j = 1; j < 4; j++) {
@@ -1743,8 +1754,10 @@ void simulation() {
 							printf("\treceivingItem: %d\n", receivingItem[i]);*/
 
 							// Decide action
+							// If waiting for charger, stay still and reset history
+							if (waitingForCharger) robots[i]->resetHistory();
 							// If receiving item, stay still
-							if (!receivingItem[i]) {
+							else if (!receivingItem[i]) {
 								if (submit) {
 									robots[i]->submitItems(tileDatabase, itemList);
 									robots[i]->resetHistory();
@@ -1781,7 +1794,7 @@ void simulation() {
 							for (int j = 0; j < ITEMS_TO_RETRIEVE; j++) {
 								if (itemList[j] == 0) itemsRetrieved++;
 							}
-							if (itemsRetrieved == 100) {
+							if (itemsRetrieved == ITEMS_TO_RETRIEVE) {
 								printf("Completed!\n");
 								quit = true;
 								finishSimulation = true;
@@ -1850,6 +1863,11 @@ void simulation() {
 			delete tiles[i];
 			tiles[i] = nullptr;
 		}
+
+		/*if (tileDatabase[i] != nullptr) {
+			delete tileDatabase[i];
+			tileDatabase[i] = nullptr;
+		}*/
 	}
 
 	// Delete robots
