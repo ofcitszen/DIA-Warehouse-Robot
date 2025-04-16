@@ -13,7 +13,8 @@ int SCREEN_HEIGHT = 720;
 float SCREEN_SCALE = 1.5;
 
 // Number of items to be retrieved
-constexpr int ITEMS_TO_RETRIEVE = 1000;
+constexpr int MAX_ITEMS_RETRIEVE = 1000;
+int NUMBER_ITEMS_RETRIEVE = MAX_ITEMS_RETRIEVE;
 
 // Number of floors
 constexpr int NUMBER_OF_FLOORS = 1;
@@ -23,15 +24,19 @@ constexpr int WH = 16;
 // Number of tile sprites
 constexpr int TILE_SPRITES = 9;
 // Maximum number of tiles
-constexpr int MAX_TILES = 2500;
+constexpr int MAX_TILES = 10000;
 // Map width
 int MAP_WIDTH = 50 * WH;
 int MAP_HEIGHT = 50 * WH;
+// Map number
+int mapNumber = 1;
 
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
 constexpr int MAX_ROBOTS = 10;
+// Number of robots
+int NUMBER_ROBOTS = MAX_ROBOTS;
 // Robot battery loss per tick of movement
 float BATTERY_LOSS = (float)0.2;
 // Robot battery gain per tick of charging
@@ -49,8 +54,10 @@ Uint64 TICK_INTERVAL = 0;
 
 // Obstacle-generating cooldown in number of ticks
 constexpr int OBSTACLE_CD = 100;
-// Number of obstacles at a time
+// Max number of obstacles at a time
 constexpr int MAX_OBSTACLES = 50;
+// Number of obstacles
+int NUMBER_OBSTACLES = MAX_OBSTACLES;
 
 // Initialise window and renderer
 SDL_Window* window;
@@ -439,7 +446,7 @@ public:
 
 				int instances = 0;
 				if (success) {
-					for (int i = 0; i < MAX_ROBOTS; i++) {
+					for (int i = 0; i < NUMBER_ROBOTS; i++) {
 						if (robots[i] != nullptr) {
 							SDL_FRect robotHitbox = robots[i]->getBox();
 							SDL_FRect selfHitbox = hitbox;
@@ -505,7 +512,7 @@ public:
 						if (weight + tiles[currentTile - map_width]->getItem() > MAX_WEIGHT) return false;
 
 						// Remove this item from the predicted item list
-						for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+						for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 							if (tiles[currentTile - map_width]->getItem() == predItemList[i]) {
 								predItemList[i] = 0;
 								break;
@@ -530,7 +537,7 @@ public:
 						if (weight + tiles[currentTile + map_width]->getItem() > MAX_WEIGHT) return false;
 
 						// Remove this item from the predicted item list
-						for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+						for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 							if (tiles[currentTile + map_width]->getItem() == predItemList[i]) {
 								predItemList[i] = 0;
 								break;
@@ -555,7 +562,7 @@ public:
 						if (weight + tiles[currentTile - 1]->getItem() > MAX_WEIGHT) return false;
 
 						// Remove this item from the predicted item list
-						for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+						for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 							if (tiles[currentTile - 1]->getItem() == predItemList[i]) {
 								predItemList[i] = 0;
 								break;
@@ -580,7 +587,7 @@ public:
 						if (weight + tiles[currentTile + 1]->getItem() > MAX_WEIGHT) return false;
 
 						// Remove this item from the predicted item list
-						for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+						for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 							if (tiles[currentTile + 1]->getItem() == predItemList[i]) {
 								predItemList[i] = 0;
 								break;
@@ -680,7 +687,7 @@ public:
 			// Check within bounds
 			if (currentTile - map_width > 0 && tiles[currentTile - map_width] != nullptr) {
 				// Check that there is a robot above
-				for (int i = 0; i < MAX_ROBOTS; i++) {
+				for (int i = 0; i < NUMBER_ROBOTS; i++) {
 					if (robots[i] != nullptr) {
 						// If this is the right robot
 						if (robots[i]->getBox().x == hitbox.x && robots[i]->getBox().y == hitbox.y - WH) {
@@ -718,7 +725,7 @@ public:
 			// Check within bounds
 			if (currentTile + map_width < map_width * map_height && tiles[currentTile + map_width] != nullptr) {
 				// Check that there is a robot below
-				for (int i = 0; i < MAX_ROBOTS; i++) {
+				for (int i = 0; i < NUMBER_ROBOTS; i++) {
 					if (robots[i] != nullptr) {
 						// If this is the right robot
 						if (robots[i]->getBox().x == hitbox.x && robots[i]->getBox().y == hitbox.y + WH) {
@@ -755,7 +762,7 @@ public:
 		case 2: // Left
 			if (currentTile % map_width > 0 && tiles[currentTile - 1] != nullptr) {
 				// Check that there is a robot to the left
-				for (int i = 0; i < MAX_ROBOTS; i++) {
+				for (int i = 0; i < NUMBER_ROBOTS; i++) {
 					if (robots[i] != nullptr) {
 						// If this is the right robot
 						if (robots[i]->getBox().x == hitbox.x - WH && robots[i]->getBox().y == hitbox.y) {
@@ -792,7 +799,7 @@ public:
 		case 3: // Right
 			if (currentTile % map_width < map_width - 1 && tiles[currentTile + 1] != nullptr) {
 				// Check that there is a robot to the left
-				for (int i = 0; i < MAX_ROBOTS; i++) {
+				for (int i = 0; i < NUMBER_ROBOTS; i++) {
 					if (robots[i] != nullptr) {
 						// If this is the right robot
 						if (robots[i]->getBox().x == hitbox.x + WH && robots[i]->getBox().y == hitbox.y) {
@@ -837,7 +844,7 @@ public:
 			if (tiles[getTile(tiles)]->getType() == 8) {
 				for (int j = 0; j < MAX_WEIGHT; j++) {
 					if (items[j] != 0) {
-						for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+						for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 							if (itemList[i] != 0 && items[j] == itemList[i]) {
 								// Submit the item
 								weight -= items[j];
@@ -873,49 +880,51 @@ public:
 
 		bool stop = false;
 		for (int i = 0; i < sightRange && !stop; i++) {
-			// Record tile in database
-			if (tileDatabase[currentTile] != nullptr) {
-				tileDatabase[currentTile]->setTileType(tiles[currentTile]->getType());
-				tileDatabase[currentTile]->setItem(tiles[currentTile]->getItem());
-			}
+			if (tiles[currentTile] != nullptr) {
+				// Record tile in database
+				if (tileDatabase[currentTile] != nullptr) {
+					tileDatabase[currentTile]->setTileType(tiles[currentTile]->getType());
+					tileDatabase[currentTile]->setItem(tiles[currentTile]->getItem());
+				}
 
-			// Stop sight if this tile is a shelf or wall
-			if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5 || tiles[currentTile]->getType() == 0) break;
+				// Stop sight if this tile is a shelf or wall
+				if (tiles[currentTile]->getType() >= 2 && tiles[currentTile]->getType() <= 5 || tiles[currentTile]->getType() == 0) break;
 
-			// Stop sight if next tile is out of bounds
-			switch (dir) {
-			case 0: // Up
-				if (currentTile - map_width < 0) stop = true;
-				else if (tiles[currentTile - map_width] == nullptr) stop = true;
+				// Stop sight if next tile is out of bounds
+				switch (dir) {
+				case 0: // Up
+					if (currentTile - map_width < 0) stop = true;
+					else if (tiles[currentTile - map_width] == nullptr) stop = true;
 
-				// Go to next tile
-				else currentTile -= map_width;
+					// Go to next tile
+					else currentTile -= map_width;
 
-				break;
-			case 1: // Down
-				if (currentTile + map_width >= map_width * map_height) stop = true;
-				else if (tiles[currentTile + map_width] == nullptr) stop = true;
+					break;
+				case 1: // Down
+					if (currentTile + map_width >= map_width * map_height) stop = true;
+					else if (tiles[currentTile + map_width] == nullptr) stop = true;
 
-				// Go to next tile
-				else currentTile += map_width;
+					// Go to next tile
+					else currentTile += map_width;
 
-				break;
-			case 2: // Left
-				if (currentTile % map_width == 0) stop = true;
-				else if (tiles[currentTile - 1] == nullptr) stop = true;
+					break;
+				case 2: // Left
+					if (currentTile % map_width == 0) stop = true;
+					else if (tiles[currentTile - 1] == nullptr) stop = true;
 
-				// Go to next tile
-				else currentTile--;
+					// Go to next tile
+					else currentTile--;
 
-				break;
-			case 3: // Right
-				if (currentTile % map_width == map_width - 1) stop = true;
-				else if (tiles[currentTile + 1] == nullptr) stop = true;
+					break;
+				case 3: // Right
+					if (currentTile % map_width == map_width - 1) stop = true;
+					else if (tiles[currentTile + 1] == nullptr) stop = true;
 
-				// Go to next tile
-				else currentTile++;
+					// Go to next tile
+					else currentTile++;
 
-				break;
+					break;
+				}
 			}
 		}
 	}
@@ -1189,8 +1198,11 @@ void menu() {
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
 	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 1 * 150, "Settings");
 	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
+
 	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
 	buttons[3]->setShown();
+	buttons[4] = new Button(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 2 * 150, "<"); // Decrease map number
+	buttons[5] = new Button(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 2 * 150, ">"); // Increase map number
 
 	// Main loop
 	bool quit = false;
@@ -1225,7 +1237,10 @@ void menu() {
 
 		// Render title
 		if (!changeSettings) renderTitle("Warehouse Robot Simulation", (float)SCREEN_WIDTH / 2, 300, true);
-		else renderTitle("Settings", (float)SCREEN_WIDTH / 2, 150, true);
+		else {
+			renderTitle("Settings", (float)SCREEN_WIDTH / 2, 150, true);
+			renderTitle("Map number:", (float)SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, true);
+		}
 
 		// Render buttons
 		for (int i = 0; i < MAX_BUTTONS; i++) {
@@ -1275,9 +1290,9 @@ void simulation() {
 	srand((unsigned int)time(0));
 
 	// List of items to retrieve
-	int itemList[ITEMS_TO_RETRIEVE] = { 0 };
-	int predItemList[ITEMS_TO_RETRIEVE] = { 0 };
-	for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+	int itemList[MAX_ITEMS_RETRIEVE] = { 0 };
+	int predItemList[MAX_ITEMS_RETRIEVE] = { 0 };
+	for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 		itemList[i] = rand() % 10 + 1;
 		predItemList[i] = itemList[i];
 	}
@@ -1297,7 +1312,7 @@ void simulation() {
 		}
 
 		// Create robots in random valid locations
-		for (int i = 0; i < MAX_ROBOTS; i++) {
+		for (int i = 0; i < NUMBER_ROBOTS; i++) {
 			int spawnX = 0;
 			int spawnY = 0;
 
@@ -1402,29 +1417,33 @@ void simulation() {
 				if (ticks % OBSTACLE_CD == 0) {
 					// Reset all existing obstacle tiles to be floor tiles
 					for (int i = 0; i < MAX_TILES; i++) {
-						if (tiles[i]->getType() == 9) tiles[i]->setTileType(1);
+						if (tiles[i] != nullptr) {
+							if (tiles[i]->getType() == 9) tiles[i]->setTileType(1);
+						}
 					}
 
 					// Randomly generate obstacle tiles
-					for (int i = 0; i < MAX_OBSTACLES; i++) {
+					for (int i = 0; i < NUMBER_OBSTACLES; i++) {
 						// Look for a random floor tile (type == 1)
 						bool valid = false;
 						while (!valid) {
 							int obstacleTile = rand() % MAX_TILES;
 
-							if (tiles[obstacleTile]->getType() == 1) {
-								valid = true;
+							if (tiles[obstacleTile] != nullptr) {
+								if (tiles[obstacleTile]->getType() == 1) {
+									valid = true;
 
-								// Check that there are no robots on this tile
-								for (int j = 0; j < MAX_ROBOTS; j++) {
-									if (robots[j]->getBox().x == tiles[obstacleTile]->getX() && robots[j]->getBox().y == tiles[obstacleTile]->getY()) {
-										valid = false;
-										break;
+									// Check that there are no robots on this tile
+									for (int j = 0; j < NUMBER_ROBOTS; j++) {
+										if (robots[j]->getBox().x == tiles[obstacleTile]->getX() && robots[j]->getBox().y == tiles[obstacleTile]->getY()) {
+											valid = false;
+											break;
+										}
 									}
 								}
-							}
 
-							if (valid) tiles[obstacleTile]->setTileType(9);
+								if (valid) tiles[obstacleTile]->setTileType(9);
+							}
 						}
 					}
 				}
@@ -1457,7 +1476,7 @@ void simulation() {
 							else {
 								// Find smallest item in itemList
 								int smallestItem = 10;
-								for (int j = 0; j < ITEMS_TO_RETRIEVE; j++) {
+								for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
 									if (predItemList[j] < smallestItem && predItemList[j] > 0) {
 										smallestItem = predItemList[j];
 										if (smallestItem == 1) break;
@@ -1484,7 +1503,7 @@ void simulation() {
 
 														// Check if some other robot is already on that charger
 														if (distance <= WH * MAX_ROBOTS) {
-															for (int k = 0; k < MAX_ROBOTS; k++) {
+															for (int k = 0; k < NUMBER_ROBOTS; k++) {
 																if (robots[k] != nullptr) {
 																	if (robots[k]->getBox().x == goalX && robots[k]->getBox().y == goalY) {
 																		waitingForCharger = true;
@@ -1506,7 +1525,7 @@ void simulation() {
 										for (int j = 0; j < MAX_TILES; j++) {
 											if (tileDatabase[j] != nullptr) {
 												if (tileDatabase[j]->getType() >= 2 && tileDatabase[j]->getType() <= 5) {
-													for (int k = 0; k < ITEMS_TO_RETRIEVE; k++) {
+													for (int k = 0; k < NUMBER_ITEMS_RETRIEVE; k++) {
 														// If this item is in predItemList and the robot has space for it
 														if (tileDatabase[j]->getItem() == predItemList[k] && robots[i]->getWeight() + tileDatabase[j]->getItem() <= MAX_WEIGHT) {
 															switch (tileDatabase[j]->getType()) {
@@ -1645,7 +1664,7 @@ void simulation() {
 							// Check that that movement is not blocked by a robot
 							// If blocked and finding exit, pass item to that robot
 							int itemToPass = 0;
-							for (int j = 0; j < MAX_ROBOTS; j++) {
+							for (int j = 0; j < NUMBER_ROBOTS; j++) {
 								if (robots[j] != nullptr) {
 									if (robots[j]->getBox().x == robots[i]->getBox().x) {
 										if (robots[j]->getBox().y == robots[i]->getBox().y - WH) {
@@ -1791,10 +1810,10 @@ void simulation() {
 							robots[i]->updateHistory(tileDatabase);
 
 							itemsRetrieved = 0;
-							for (int j = 0; j < ITEMS_TO_RETRIEVE; j++) {
+							for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
 								if (itemList[j] == 0) itemsRetrieved++;
 							}
-							if (itemsRetrieved == ITEMS_TO_RETRIEVE) {
+							if (itemsRetrieved == NUMBER_ITEMS_RETRIEVE) {
 								printf("Completed!\n");
 								quit = true;
 								finishSimulation = true;
@@ -1831,7 +1850,7 @@ void simulation() {
 			}
 
 			// Render robots
-			for (int i = 0; i < MAX_ROBOTS; i++) {
+			for (int i = 0; i < NUMBER_ROBOTS; i++) {
 				if (robots[i] != nullptr) {
 					robots[i]->render(camera);
 				}
@@ -1871,7 +1890,7 @@ void simulation() {
 	}
 
 	// Delete robots
-	for (int i = 0; i < MAX_ROBOTS; i++) {
+	for (int i = 0; i < NUMBER_ROBOTS; i++) {
 		if (robots[i] != nullptr) {
 			delete robots[i];
 			robots[i] = nullptr;
@@ -1889,7 +1908,7 @@ void simulation() {
 	if (returnMenu) menu();
 	else if (finishSimulation) {
 		itemsRetrieved = 0;
-		for (int i = 0; i < ITEMS_TO_RETRIEVE; i++) {
+		for (int i = 0; i < NUMBER_ITEMS_RETRIEVE; i++) {
 			if (itemList[i] == 0) itemsRetrieved++;
 		}
 
