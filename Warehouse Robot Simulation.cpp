@@ -16,9 +16,6 @@ float SCREEN_SCALE = 1.5;
 constexpr int MAX_ITEMS_RETRIEVE = 100;
 int NUMBER_ITEMS_RETRIEVE = MAX_ITEMS_RETRIEVE;
 
-// Number of floors
-constexpr int NUMBER_OF_FLOORS = 1;
-
 // Tile width and height
 constexpr int WH = 16;
 // Number of tile sprites
@@ -30,11 +27,13 @@ int MAP_WIDTH = 50 * WH;
 int MAP_HEIGHT = 50 * WH;
 // Map number
 int mapNumber = 1;
+// Map name
+std::string mapPath = "warehouse_resources/map1.map";
 
 // Number of robot sprites
 constexpr int ROBOT_SPRITES = 4;
 // Maximum number of robots
-constexpr int MAX_ROBOTS = 40;
+constexpr int MAX_ROBOTS = 100;
 // Number of robots
 int NUMBER_ROBOTS = MAX_ROBOTS;
 // Robot battery loss per tick of movement
@@ -55,7 +54,7 @@ Uint64 TICK_INTERVAL = 0;
 // Obstacle-generating cooldown in number of ticks
 constexpr int OBSTACLE_CD = 100;
 // Max number of obstacles at a time
-constexpr int MAX_OBSTACLES = 10;
+constexpr int MAX_OBSTACLES = 100;
 // Number of obstacles
 int NUMBER_OBSTACLES = MAX_OBSTACLES;
 
@@ -431,7 +430,6 @@ public:
 	}
 	bool move(Tile* tiles[], Robot* robots[]) {
 		bool success = true;
-		bool elevator = false;
 
 		if (battery > 0 && weight <= MAX_WEIGHT) {
 			// Move robot
@@ -452,11 +450,6 @@ public:
 							SDL_FRect tileHitbox = tiles[i]->getBox();
 							if (SDL_HasIntersectionF(&tileHitbox, &hitbox)) {
 								success = false;
-
-								// Set flag for elevators
-								if (tiles[i]->getType() == 7) {
-									elevator = true;
-								}
 								break;
 							}
 						}
@@ -469,12 +462,6 @@ public:
 						if (robots[i] != nullptr) {
 							SDL_FRect robotHitbox = robots[i]->getBox();
 							SDL_FRect selfHitbox = hitbox;
-
-							// Check all floors for elevator
-							if (elevator) {
-								robotHitbox.y = (float)((int)robotHitbox.y % (MAP_HEIGHT / NUMBER_OF_FLOORS));
-								selfHitbox.y = (float)((int)selfHitbox.y % (MAP_HEIGHT / NUMBER_OF_FLOORS));
-							}
 
 							if (SDL_HasIntersectionF(&robotHitbox, &selfHitbox)) {
 								instances++;
@@ -647,51 +634,6 @@ public:
 				else sprite = 3;
 
 				return true;
-			}
-		}
-		return false;
-	}
-	bool useElevator(Tile* tiles[], int updown) {
-		int currentTile = getTile(tiles);
-		int map_width = MAP_WIDTH / WH;
-		int map_height = MAP_HEIGHT / WH;
-
-		// If standing on an elevator tile
-		if (tiles[getTile(tiles)] != nullptr) {
-			if (tiles[getTile(tiles)]->getType() == 7) {
-				switch (updown) {
-				case 0: // Up
-					// Check bounds
-					if ((currentTile + map_width * map_height / NUMBER_OF_FLOORS < map_width * map_height) && tiles[currentTile + map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
-						hitbox.y += MAP_HEIGHT / NUMBER_OF_FLOORS;
-
-						battery -= BATTERY_LOSS;
-						if (battery < 0) battery = 0;
-
-						// Set sprite based on battery
-						if (battery == 0) sprite = 0;
-						else if (battery < 20) sprite = 1;
-						else if (battery < 50) sprite = 2;
-
-						return true;
-					}
-					break;
-				case 1: // Down
-					// Check bounds
-					if ((currentTile - map_width * map_height / NUMBER_OF_FLOORS > 0) && tiles[currentTile - map_width * map_height / NUMBER_OF_FLOORS] != nullptr) {
-						hitbox.y -= MAP_HEIGHT / NUMBER_OF_FLOORS;
-
-						battery -= BATTERY_LOSS;
-						if (battery < 0) battery = 0;
-
-						// Set sprite based on battery
-						if (battery == 0) sprite = 0;
-						else if (battery < 20) sprite = 1;
-						else if (battery < 50) sprite = 2;
-
-						return true;
-					}
-				}
 			}
 		}
 		return false;
@@ -1205,7 +1147,7 @@ int setTiles(Tile* tiles[], Tile* tileDatabase[], std::string mapFile, int mapWi
 	else return false;
 }
 
-// Just function declarations
+// Just a function declaration
 void simulation();
 
 // Main menu
@@ -1220,9 +1162,10 @@ void menu() {
 	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
 
 	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
-	buttons[4] = new Button(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 2 * 150, "<"); // Decrease map number
-	buttons[5] = new Button(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 2 * 150, ">"); // Increase map number
-	for (int i = 3; i < 6; i++) buttons[i]->setShown();
+	buttons[4] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 170, "Next"); // Change map number
+	buttons[5] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 50, "Change"); // Change number of robots
+	buttons[6] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 270, "Change"); // Change number of obstacles
+	for (int i = 3; i < 7; i++) buttons[i]->setShown();
 	// Main loop
 	bool quit = false;
 	bool startSimulation = false;
@@ -1243,22 +1186,55 @@ void menu() {
 			// Settings button and Back button
 			if (buttons[1]->isShown() && buttons[1]->handleEvents(e) || buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
 				changeSettings = !changeSettings;
-				for (int i = 0; i < 4; i++) buttons[i]->setShown();
+				for (int i = 0; i < 7; i++) buttons[i]->setShown();
 			}
 
 			// Quit button
 			if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) quit = true;
+
+			// Change map number
+			if (buttons[4]->isShown() && buttons[4]->handleEvents(e)) {
+				mapNumber++;
+				if (mapNumber > 5) mapNumber = 0;
+
+				textObj.str("");
+				textObj << "warehouse_resources/map" << mapNumber << ".map";
+				mapPath = textObj.str().c_str();
+			}
+
+			// Change number of robots
+			if (buttons[5]->isShown() && buttons[5]->handleEvents(e)) {
+				NUMBER_ROBOTS += 10;
+				if (NUMBER_ROBOTS > MAX_ROBOTS) NUMBER_ROBOTS = 10;
+			}
+
+			// Change number of obstacles
+			if (buttons[6]->isShown() && buttons[6]->handleEvents(e)) {
+				NUMBER_OBSTACLES += 10;
+				if (NUMBER_OBSTACLES > MAX_OBSTACLES) NUMBER_OBSTACLES = 10;
+			}
 		}
 
 		// Reset screen
 		SDL_SetRenderDrawColor(renderer, 0x00, 0x00, 0x00, 0xFF);
 		SDL_RenderClear(renderer);
 
-		// Render title
+		// Render text
 		if (!changeSettings) renderTitle("Warehouse Robot Simulation", (float)SCREEN_WIDTH / 2, 300, true);
 		else {
 			renderTitle("Settings", (float)SCREEN_WIDTH / 2, 150, true);
-			renderTitle("Map number:", (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 + 150, true);
+
+			textObj.str("");
+			textObj << "Map number: " << mapNumber;
+			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 - 280, true);
+
+			textObj.str("");
+			textObj << "Number of Robots: " << NUMBER_ROBOTS;
+			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 - 60, true);
+
+			textObj.str("");
+			textObj << "Number of Obstacles: " << NUMBER_OBSTACLES;
+			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 + 160, true);
 		}
 
 		// Render buttons
@@ -1317,7 +1293,7 @@ void simulation() {
 	bool finishSimulation = false;
 
 	// Create tiles based on map
-	numberOfShelves = setTiles(tiles, tileDatabase, "warehouse_resources/map2.map", MAP_WIDTH, MAP_HEIGHT);
+	numberOfShelves = setTiles(tiles, tileDatabase, mapPath, MAP_WIDTH, MAP_HEIGHT);
 	if (numberOfShelves == 0) printf("setTiles() error\n");
 	else {
 		// in tileDatabase, set all black tiles (type 0)
@@ -1335,7 +1311,7 @@ void simulation() {
 			bool valid = false;
 			while (!valid) {
 				spawnX = WH * (rand() % MAP_WIDTH / WH);
-				spawnY = WH * (rand() % MAP_HEIGHT / WH / NUMBER_OF_FLOORS);
+				spawnY = WH * (rand() % MAP_HEIGHT / WH);
 
 				for (int j = 0; j < MAX_TILES; j++) {
 					if (tiles[j] != nullptr) {
@@ -1360,8 +1336,7 @@ void simulation() {
 		// Time control
 		Uint64 lastTick = 0;
 
-		bool receivingItem[MAX_ROBOTS] = { false }; // 0: not receiving item, 1: receiving item (stay still), 2: time to reset this to 0
-		int numberOfPassedItems = 0;
+		bool receivingItem[MAX_ROBOTS] = { false };
 		bool chargerKnown = false;
 
 		// Main loop
@@ -1472,6 +1447,7 @@ void simulation() {
 
 				// Process robots
 				if (SDL_GetTicks64() - lastTick > TICK_INTERVAL) {
+					// The entire decision and pathfinding algorithm is in this for-loop
 					for (int i = 0; i < MAX_ROBOTS && !quit; i++) {
 						if (robots[i] != nullptr) {
 							float goalX = 0;
@@ -1533,7 +1509,6 @@ void simulation() {
 																		// Reset as if this charger is no longer a charger
 																		findCharger = false;
 																		distance = std::numeric_limits<double>::infinity();
-
 																		lookForNextCharger = true;
 																		break;
 																	}
@@ -1544,8 +1519,9 @@ void simulation() {
 												}
 											}
 										}
+										
 										if (!findCharger) {
-											// if all known chargers are taken by other robots, wait
+											// If all known chargers are taken by other robots, wait
 											if (lookForNextCharger) waitingForCharger = true;
 
 											// if no known charger, explore to look for one
@@ -1566,7 +1542,6 @@ void simulation() {
 																if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - WH - robots[i]->getBox().y, 2)) < distance) {
 																	goalX = tileDatabase[j]->getX();
 																	goalY = tileDatabase[j]->getY() - WH;
-																	distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 																	takeDir = 1;
 																}
 																break;
@@ -1574,7 +1549,6 @@ void simulation() {
 																if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() + WH - robots[i]->getBox().y, 2)) < distance) {
 																	goalX = tileDatabase[j]->getX();
 																	goalY = tileDatabase[j]->getY() + WH;
-																	distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 																	takeDir = 0;
 																}
 																break;
@@ -1582,7 +1556,6 @@ void simulation() {
 																if (std::sqrt(pow(tileDatabase[j]->getX() - WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
 																	goalX = tileDatabase[j]->getX() - WH;
 																	goalY = tileDatabase[j]->getY();
-																	distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 																	takeDir = 3;
 																}
 																break;
@@ -1590,11 +1563,11 @@ void simulation() {
 																if (std::sqrt(pow(tileDatabase[j]->getX() + WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
 																	goalX = tileDatabase[j]->getX() + WH;
 																	goalY = tileDatabase[j]->getY();
-																	distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 																	takeDir = 2;
 																}
 																break;
 															}
+															distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 															findShelf = true;
 														}
 													}
@@ -1836,7 +1809,6 @@ void simulation() {
 									else {
 										robots[i]->passItem(robots, tileDatabase, itemToPass);
 										receivingItem[recipientRobot] = true;
-										numberOfPassedItems++;
 									}
 								}
 								// Turn to direction if not already facing it
