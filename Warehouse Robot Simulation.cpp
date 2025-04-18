@@ -1521,6 +1521,7 @@ void simulation() {
 														distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
 														findCharger = true;
 														chargerKnown = true;
+														lookForNextCharger = false;
 
 														// If standing on charger, charge
 														if (distance == 0) chargeBattery = true;
@@ -1544,10 +1545,10 @@ void simulation() {
 										}
 										
 										if (!findCharger) {
-											// If all known chargers are taken by other robots, wait
+											// If nearest charger is taken by another robot, wait
 											if (lookForNextCharger) waitingForCharger = true;
 
-											// if no known charger, explore to look for one
+											// If no known chargers, explore to look for one
 											else explore = true;
 										}
 									}
