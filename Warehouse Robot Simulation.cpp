@@ -1197,6 +1197,29 @@ void menu() {
 				mapNumber++;
 				if (mapNumber > 5) mapNumber = 0;
 
+				switch (mapNumber) {
+				case 1:
+					MAP_WIDTH = 50 * WH;
+					MAP_HEIGHT = 50 * WH;
+					break;
+				case 2:
+					MAP_WIDTH = 50 * WH;
+					MAP_HEIGHT = 50 * WH;
+					break;
+				case 3:
+					MAP_WIDTH = 50 * WH;
+					MAP_HEIGHT = 50 * WH;
+					break;
+				case 4:
+					MAP_WIDTH = 50 * WH;
+					MAP_HEIGHT = 50 * WH;
+					break;
+				case 5:
+					MAP_WIDTH = 100 * WH;
+					MAP_HEIGHT = 100 * WH;
+					break;
+				}
+
 				textObj.str("");
 				textObj << "warehouse_resources/map" << mapNumber << ".map";
 				mapPath = textObj.str().c_str();
