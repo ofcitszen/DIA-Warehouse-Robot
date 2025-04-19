@@ -1195,7 +1195,7 @@ void menu() {
 			// Change map number
 			if (buttons[4]->isShown() && buttons[4]->handleEvents(e)) {
 				mapNumber++;
-				if (mapNumber > 5) mapNumber = 1;
+				if (mapNumber > 8) mapNumber = 1;
 
 				switch (mapNumber) {
 				case 1:
@@ -1215,6 +1215,18 @@ void menu() {
 					MAP_HEIGHT = 50 * WH;
 					break;
 				case 5:
+					MAP_WIDTH = 100 * WH;
+					MAP_HEIGHT = 100 * WH;
+					break;
+				case 6:
+					MAP_WIDTH = 100 * WH;
+					MAP_HEIGHT = 100 * WH;
+					break;
+				case 7:
+					MAP_WIDTH = 100 * WH;
+					MAP_HEIGHT = 100 * WH;
+					break;
+				case 8:
 					MAP_WIDTH = 100 * WH;
 					MAP_HEIGHT = 100 * WH;
 					break;
