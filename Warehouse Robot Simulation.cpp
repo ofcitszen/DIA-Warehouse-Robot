@@ -1990,5 +1990,10 @@ int main(int argc, char** argv) {
 	// Close SDL library
 	closeSDL();
 
+	// Prevent program from closing immediately
+	printf("\nEnter any number to quit\n> ");
+	int i = 0;
+	std::cin >> i;
+
 	return 0;
 }
