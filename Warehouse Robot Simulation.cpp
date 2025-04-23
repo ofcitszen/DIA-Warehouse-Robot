@@ -1239,14 +1239,18 @@ void menu() {
 
 			// Change number of robots
 			if (buttons[5]->isShown() && buttons[5]->handleEvents(e)) {
-				NUMBER_ROBOTS += 10;
+				if (NUMBER_ROBOTS < 30) NUMBER_ROBOTS += 5;
+				else NUMBER_ROBOTS += 10;
+
 				if (NUMBER_ROBOTS > MAX_ROBOTS) NUMBER_ROBOTS = 1;
-				else if (NUMBER_ROBOTS == 11) NUMBER_ROBOTS -= 1;
+				else if (NUMBER_ROBOTS == 6) NUMBER_ROBOTS -= 1;
 			}
 
 			// Change number of obstacles
 			if (buttons[6]->isShown() && buttons[6]->handleEvents(e)) {
-				NUMBER_OBSTACLES += 10;
+				if (NUMBER_OBSTACLES < 30) NUMBER_OBSTACLES += 5;
+				else NUMBER_OBSTACLES += 10;
+
 				if (NUMBER_OBSTACLES > MAX_OBSTACLES) NUMBER_OBSTACLES = 0;
 			}
 		}
