@@ -37,7 +37,7 @@ constexpr int MAX_ROBOTS = 100;
 // Number of robots
 int NUMBER_ROBOTS = MAX_ROBOTS;
 // Robot battery loss per tick of movement
-float BATTERY_LOSS = (float)0.2;
+float BATTERY_LOSS = (float)0.1;
 // Robot battery gain per tick of charging
 float BATTERY_GAIN = 5;
 // Maximum weight of items that a robot can carry at once
@@ -1211,12 +1211,12 @@ void menu() {
 					MAP_HEIGHT = 50 * WH;
 					break;
 				case 4:
-					MAP_WIDTH = 50 * WH;
-					MAP_HEIGHT = 50 * WH;
+					MAP_WIDTH = 25 * WH;
+					MAP_HEIGHT = 25 * WH;
 					break;
 				case 5:
-					MAP_WIDTH = 100 * WH;
-					MAP_HEIGHT = 100 * WH;
+					MAP_WIDTH = 25 * WH;
+					MAP_HEIGHT = 25 * WH;
 					break;
 				case 6:
 					MAP_WIDTH = 100 * WH;
