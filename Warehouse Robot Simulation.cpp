@@ -246,6 +246,7 @@ public:
 		}
 		else {
 			item = -1;
+			weight = -1;
 		}
 	}
 	void render(SDL_FRect& camera) {
@@ -1490,8 +1491,8 @@ void simulation() {
 					// The entire decision and pathfinding algorithm is in this for-loop
 					for (int i = 0; i < MAX_ROBOTS && !quit; i++) {
 						if (robots[i] != nullptr) {
-							float goalX = 0;
-							float goalY = 0;
+							float goalX = robots[i]->getBox().x;
+							float goalY = robots[i]->getBox().y;
 							double distance = std::numeric_limits<double>::infinity();
 							int takeDir = -1;
 							bool findShelf = false;
@@ -1803,7 +1804,6 @@ void simulation() {
 									bestAction = j;
 								}
 							}
-							if (f[0] == f[1] && f[2] == f[3] && f[1] == f[2]) bestAction = rand() % 4;
 
 							/*printf("\nRobot %d\n", i);
 							printf("\nStatus:\t [0]: %lf [1]: %lf [2]: %lf [3]: %lf\n", f[0], f[1], f[2], f[3]);
