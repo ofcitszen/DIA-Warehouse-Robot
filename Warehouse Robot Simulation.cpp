@@ -37,7 +37,7 @@ constexpr int MAX_ROBOTS = 100;
 // Number of robots
 int NUMBER_ROBOTS = MAX_ROBOTS;
 // Robot battery loss per tick of movement
-float BATTERY_LOSS = (float)0.1;
+float BATTERY_LOSS = (float)0.2;
 // Robot battery gain per tick of charging
 float BATTERY_GAIN = 5;
 // Maximum weight of items that a robot can carry at once
@@ -383,13 +383,20 @@ public:
 
 	void addItem(int item) {
 		// Add this item to the robot
-		for (int i = 0; i < MAX_WEIGHT; i++) {
-			if (items[i] == 0) {
-				items[i] = item;
-				weight += weightOf(item);
-				break;
+		if (item != 0) {
+			for (int i = 0; i < MAX_WEIGHT; i++) {
+				if (items[i] == 0) {
+					items[i] = item;
+					weight += weightOf(item);
+					break;
+				}
 			}
 		}
+	}
+	void clearItems() {
+		for (int i = 0; i < MAX_WEIGHT; i++) items[i] = 0;
+		
+		weight = 0;
 	}
 
 	// Set functions
@@ -397,18 +404,18 @@ public:
 		hitbox.x = x;
 		hitbox.y = y;
 	}
-	void setItems(int setItems[]) {
-		weight = 0;
-		for (int i = 0; i < MAX_WEIGHT; i++) {
-			items[i] = setItems[i];
-			weight += weightOf(setItems[i]);
-		}
-	}
 	void setDir(int direction) {
 		dir = direction;
 	}
 	void setBattery(float batteryLevel) {
 		battery = batteryLevel;
+
+		if (battery < 0) battery = 0;
+
+		// Set sprite based on battery
+		if (battery == 0) sprite = 0;
+		else if (battery < 20) sprite = 1;
+		else if (battery < 50) sprite = 2;
 	}
 
 	// Actions
@@ -620,6 +627,105 @@ public:
 		else if (battery < 50) sprite = 2;
 
 		return true;
+	}
+	bool takeRobotItem(Tile* tiles[], Robot* robots[]) {
+		bool success = false;
+
+		int currentTile = getTile(tiles);
+		int map_width = MAP_WIDTH / WH;
+		int map_height = MAP_HEIGHT / WH;
+
+		switch (dir) {
+		case 0: // Up
+			// Check that there is a robot above
+			for (int i = 0; i < NUMBER_ROBOTS; i++) {
+				if (robots[i] != nullptr) {
+					if (robots[i]->getBox().x == hitbox.x && robots[i]->getBox().y == hitbox.y - WH) {
+						// If we have nothing on hand
+						if (weight == 0) {
+							// Add all of the dead robot's items to our hand
+							for (int j = 0; j < MAX_WEIGHT; j++) addItem(robots[i]->getItem(j));
+
+							// Clear the dead robot's hand
+							robots[i]->clearItems();
+							success = true;
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 1: // Down
+			// Check that there is a robot below
+			for (int i = 0; i < NUMBER_ROBOTS; i++) {
+				if (robots[i] != nullptr) {
+					if (robots[i]->getBox().x == hitbox.x && robots[i]->getBox().y == hitbox.y + WH) {
+						// If we have nothing on hand
+						if (weight == 0) {
+							// Add all of the dead robot's items to our hand
+							for (int j = 0; j < MAX_WEIGHT; j++) addItem(robots[i]->getItem(j));
+
+							// Clear the dead robot's hand
+							robots[i]->clearItems();
+							success = true;
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 2: // Left
+			// Check that there is a robot to the left
+			for (int i = 0; i < NUMBER_ROBOTS; i++) {
+				if (robots[i] != nullptr) {
+					if (robots[i]->getBox().x == hitbox.x - WH && robots[i]->getBox().y == hitbox.y) {
+						// If we have nothing on hand
+						if (weight == 0) {
+							// Add all of the dead robot's items to our hand
+							for (int j = 0; j < MAX_WEIGHT; j++) addItem(robots[i]->getItem(j));
+
+							// Clear the dead robot's hand
+							robots[i]->clearItems();
+							success = true;
+							break;
+						}
+					}
+				}
+			}
+			break;
+		case 3: // Right
+			// Check that there is a robot to the right
+			for (int i = 0; i < NUMBER_ROBOTS; i++) {
+				if (robots[i] != nullptr) {
+					if (robots[i]->getBox().x == hitbox.x + WH && robots[i]->getBox().y == hitbox.y) {
+						// If we have nothing on hand
+						if (weight == 0) {
+							// Add all of the dead robot's items to our hand
+							for (int j = 0; j < MAX_WEIGHT; j++) addItem(robots[i]->getItem(j));
+
+							// Clear the dead robot's hand
+							robots[i]->clearItems();
+							success = true;
+							break;
+						}
+					}
+				}
+			}
+			break;
+		}
+
+		if (success) {
+			// Decrement battery
+			battery -= BATTERY_LOSS;
+			if (battery < 0) battery = 0;
+
+			// Set sprite based on battery
+			if (battery == 0) sprite = 0;
+			else if (battery < 20) sprite = 1;
+			else if (battery < 50) sprite = 2;
+		}
+		
+		return success;
 	}
 	bool charge(Tile* tiles[]) {
 		// If standing on a charger tile, increase battery level
@@ -1311,6 +1417,7 @@ void simulation() {
 	// Results screen variables
 	int ticks = 0;
 	int itemsRetrieved = 0;
+	int numDeadRobots = 0;
 
 	// Initialise objects
 	Tile* tiles[MAX_TILES] = { nullptr };
@@ -1379,6 +1486,7 @@ void simulation() {
 
 		bool receivingItem[MAX_ROBOTS] = { false };
 		bool chargerKnown = false;
+		int deadRobot[MAX_ROBOTS] = { -1 }; // index is the dead robot, value is the robot to rescue it
 
 		// Main loop
 		bool quit = false;
@@ -1491,68 +1599,81 @@ void simulation() {
 					// The entire decision and pathfinding algorithm is in this for-loop
 					for (int i = 0; i < MAX_ROBOTS && !quit; i++) {
 						if (robots[i] != nullptr) {
-							float goalX = robots[i]->getBox().x;
-							float goalY = robots[i]->getBox().y;
-							double distance = std::numeric_limits<double>::infinity();
-							int takeDir = -1;
-							bool findShelf = false;
-							bool explore = false;
-							bool findExit = false;
-							bool takeItemFromShelf = false;
-							bool findCharger = false;
-							bool waitingForCharger = false;
-							bool chargeBattery = false;
-							bool lookForNextCharger = false;
-							bool submit = false;
-							bool passItemAway = false;
-							int recipientRobot = 0;
-							int recipientSpace = 0;
-							int passDir = 0;
+							if (robots[i]->getBattery() > 0) {
+								float goalX = robots[i]->getBox().x;
+								float goalY = robots[i]->getBox().y;
+								double distance = std::numeric_limits<double>::infinity();
+								int takeDir = -1;
+								bool findShelf = false;
+								bool explore = false;
+								bool findExit = false;
+								bool takeItemFromShelf = false;
+								bool findCharger = false;
+								bool waitingForCharger = false;
+								bool chargeBattery = false;
+								bool lookForNextCharger = false;
+								bool submit = false;
+								bool passItemAway = false;
+								int recipientRobot = 0;
+								int recipientSpace = 0;
+								int passDir = 0;
 
-							if (receivingItem[i]) {
-								receivingItem[i] = false;
-							}
-							else {
-								// Find smallest item in itemList
-								int smallestItem = MAX_WEIGHT;
-								for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
-									if (weightOf(predItemList[j]) < weightOf(smallestItem) && predItemList[j] > 0) {
-										smallestItem = predItemList[j];
-										if (weightOf(smallestItem) == 1) break;
+								int rescueRobot = -1;
+								for (int j = 0; j < MAX_ROBOTS; j++) {
+									if (robots[j] != nullptr) {
+										if (deadRobot[j] == i) {
+											rescueRobot = j;
+											break;
+										}
 									}
 								}
+								bool takeRobotItems = false;
 
-								// Charge until 100 if already charging
-								if (tileDatabase[robots[i]->getTile(tileDatabase)] != nullptr) {
-									if (tileDatabase[robots[i]->getTile(tileDatabase)]->getType() == 6 && robots[i]->getBattery() < 100) chargeBattery = true;
+								if (receivingItem[i]) {
+									receivingItem[i] = false;
 								}
-								if (!chargeBattery) {
-									// If robot is low on battery
-									if (robots[i]->getBattery() < 50 || !chargerKnown) {
-										// Look for the closest battery charger
-										for (int j = 0; j < MAX_TILES; j++) {
-											if (tileDatabase[j] != nullptr) {
-												if (tileDatabase[j]->getType() == 6) {
-													if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
-														goalX = tileDatabase[j]->getX();
-														goalY = tileDatabase[j]->getY();
-														distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
-														findCharger = true;
-														chargerKnown = true;
-														lookForNextCharger = false;
+								else {
+									// Find smallest item in itemList
+									int smallestItem = MAX_WEIGHT;
+									for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
+										if (weightOf(predItemList[j]) < weightOf(smallestItem) && predItemList[j] > 0) {
+											smallestItem = predItemList[j];
+											if (weightOf(smallestItem) == 1) break;
+										}
+									}
 
-														// If standing on charger, charge
-														if (distance == 0) chargeBattery = true;
-														// Check if some other robot is already on that charger
-														else {
-															for (int k = 0; k < NUMBER_ROBOTS; k++) {
-																if (robots[k] != nullptr) {
-																	if (robots[k]->getBox().x == goalX && robots[k]->getBox().y == goalY) {
-																		// Reset as if this charger is no longer a charger
-																		findCharger = false;
-																		distance = std::numeric_limits<double>::infinity();
-																		lookForNextCharger = true;
-																		break;
+									// Charge until 100 if already charging
+									if (tileDatabase[robots[i]->getTile(tileDatabase)] != nullptr) {
+										if (tileDatabase[robots[i]->getTile(tileDatabase)]->getType() == 6 && robots[i]->getBattery() < 100) chargeBattery = true;
+									}
+									if (!chargeBattery) {
+										// If robot is low on battery
+										if (robots[i]->getBattery() < 50 || !chargerKnown) {
+											// Look for the closest battery charger
+											for (int j = 0; j < MAX_TILES; j++) {
+												if (tileDatabase[j] != nullptr) {
+													if (tileDatabase[j]->getType() == 6) {
+														if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+															goalX = tileDatabase[j]->getX();
+															goalY = tileDatabase[j]->getY();
+															distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+															findCharger = true;
+															chargerKnown = true;
+															lookForNextCharger = false;
+
+															// If standing on charger, charge
+															if (distance == 0) chargeBattery = true;
+															// Check if some other robot is already on that charger
+															else {
+																for (int k = 0; k < NUMBER_ROBOTS; k++) {
+																	if (robots[k] != nullptr) {
+																		if (robots[k]->getBox().x == goalX && robots[k]->getBox().y == goalY) {
+																			// Reset as if this charger is no longer a charger
+																			findCharger = false;
+																			distance = std::numeric_limits<double>::infinity();
+																			lookForNextCharger = true;
+																			break;
+																		}
 																	}
 																}
 															}
@@ -1560,315 +1681,374 @@ void simulation() {
 													}
 												}
 											}
-										}
-										
-										if (!findCharger) {
-											// If nearest charger is taken by another robot, wait
-											if (lookForNextCharger) waitingForCharger = true;
 
-											// If no known chargers, explore to look for one
-											else explore = true;
+											if (!findCharger) {
+												// If nearest charger is taken by another robot, wait
+												if (lookForNextCharger) waitingForCharger = true;
+
+												// If no known chargers, explore to look for one
+												else explore = true;
+											}
 										}
-									}
-									// If robot still has space for an item
-									else if (robots[i]->getWeight() + weightOf(smallestItem) <= MAX_WEIGHT) {
-										// Look for the closest shelf with an item in predItemList
-										for (int j = 0; j < MAX_TILES; j++) {
-											if (tileDatabase[j] != nullptr) {
-												if (tileDatabase[j]->getType() >= 2 && tileDatabase[j]->getType() <= 5) {
-													for (int k = 0; k < NUMBER_ITEMS_RETRIEVE; k++) {
-														// If this item is in predItemList and the robot has space for it
-														if (tileDatabase[j]->getItem() == predItemList[k] && robots[i]->getWeight() + tileDatabase[j]->getWeight() <= MAX_WEIGHT) {
-															switch (tileDatabase[j]->getType()) {
-															case 2:
-																if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - WH - robots[i]->getBox().y, 2)) < distance) {
-																	goalX = tileDatabase[j]->getX();
-																	goalY = tileDatabase[j]->getY() - WH;
-																	takeDir = 1;
+										// If robot is assigned to rescue a dead robot and has no items in hand
+										else if (rescueRobot >= 0 && robots[i]->getWeight() == 0) {
+											goalX = robots[rescueRobot]->getBox().x;
+											goalY = robots[rescueRobot]->getBox().y;
+											
+											if (robots[i]->getBox().x == robots[rescueRobot]->getBox().x) {
+												// If above dead robot
+												if (robots[i]->getBox().y == robots[rescueRobot]->getBox().y - WH) {
+													takeRobotItems = true;
+													takeDir = 1;
+												}
+												// If below dead robot
+												else if (robots[i]->getBox().y == robots[rescueRobot]->getBox().y + WH) {
+													takeRobotItems = true;
+													takeDir = 0;
+												}
+											}
+											else if (robots[i]->getBox().y == robots[rescueRobot]->getBox().y) {
+												// If to the left of dead robot
+												if (robots[i]->getBox().x == robots[rescueRobot]->getBox().x - WH) {
+													takeRobotItems = true;
+													takeDir = 3;
+												}
+												// If to the right of dead robot
+												else if (robots[i]->getBox().x == robots[rescueRobot]->getBox().x + WH) {
+													takeRobotItems = true;
+													takeDir = 2;
+												}
+											}
+										}
+										// If robot still has space for an item
+										else if (robots[i]->getWeight() + weightOf(smallestItem) <= MAX_WEIGHT) {
+											// Look for the closest shelf with an item in predItemList
+											for (int j = 0; j < MAX_TILES; j++) {
+												if (tileDatabase[j] != nullptr) {
+													if (tileDatabase[j]->getType() >= 2 && tileDatabase[j]->getType() <= 5) {
+														for (int k = 0; k < NUMBER_ITEMS_RETRIEVE; k++) {
+															// If this item is in predItemList and the robot has space for it
+															if (tileDatabase[j]->getItem() == predItemList[k] && robots[i]->getWeight() + tileDatabase[j]->getWeight() <= MAX_WEIGHT) {
+																switch (tileDatabase[j]->getType()) {
+																case 2:
+																	if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - WH - robots[i]->getBox().y, 2)) < distance) {
+																		goalX = tileDatabase[j]->getX();
+																		goalY = tileDatabase[j]->getY() - WH;
+																		takeDir = 1;
+																	}
+																	break;
+																case 3:
+																	if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() + WH - robots[i]->getBox().y, 2)) < distance) {
+																		goalX = tileDatabase[j]->getX();
+																		goalY = tileDatabase[j]->getY() + WH;
+																		takeDir = 0;
+																	}
+																	break;
+																case 4:
+																	if (std::sqrt(pow(tileDatabase[j]->getX() - WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+																		goalX = tileDatabase[j]->getX() - WH;
+																		goalY = tileDatabase[j]->getY();
+																		takeDir = 3;
+																	}
+																	break;
+																case 5:
+																	if (std::sqrt(pow(tileDatabase[j]->getX() + WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+																		goalX = tileDatabase[j]->getX() + WH;
+																		goalY = tileDatabase[j]->getY();
+																		takeDir = 2;
+																	}
+																	break;
 																}
-																break;
-															case 3:
-																if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() + WH - robots[i]->getBox().y, 2)) < distance) {
-																	goalX = tileDatabase[j]->getX();
-																	goalY = tileDatabase[j]->getY() + WH;
-																	takeDir = 0;
-																}
-																break;
-															case 4:
-																if (std::sqrt(pow(tileDatabase[j]->getX() - WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
-																	goalX = tileDatabase[j]->getX() - WH;
-																	goalY = tileDatabase[j]->getY();
-																	takeDir = 3;
-																}
-																break;
-															case 5:
-																if (std::sqrt(pow(tileDatabase[j]->getX() + WH - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
-																	goalX = tileDatabase[j]->getX() + WH;
-																	goalY = tileDatabase[j]->getY();
-																	takeDir = 2;
-																}
-																break;
+																distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+																findShelf = true;
 															}
-															distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
-															findShelf = true;
+														}
+														if (distance == 0 && robots[i]->getWeight() + tileDatabase[j]->getWeight() <= MAX_WEIGHT && findShelf) {
+															takeItemFromShelf = true;
+															break;
 														}
 													}
-													if (distance == 0 && robots[i]->getWeight() + tileDatabase[j]->getWeight() <= MAX_WEIGHT && findShelf) {
-														takeItemFromShelf = true;
+												}
+											}
+											// If no known shelf with an item in predItemList exists, explore
+											if (!findShelf) explore = true;
+										}
+										else {
+											// Look for closest exit
+											for (int j = 0; j < MAX_TILES; j++) {
+												if (tileDatabase[j] != nullptr) {
+													if (tileDatabase[j]->getType() == 8) {
+														if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+															goalX = tileDatabase[j]->getX();
+															goalY = tileDatabase[j]->getY();
+															distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+															findExit = true;
+
+															if (distance == 0 && robots[i]->getWeight() > 0) submit = true;
+														}
+													}
+												}
+											}
+											// If no known exit in database, explore
+											if (!findExit) explore = true;
+										}
+									}
+								}
+								// Exploration
+								if (explore) {
+									// Look for the nearest unknown tile
+									for (int j = 0; j < MAX_TILES; j++) {
+										if (tileDatabase[j] != nullptr) {
+											if (tileDatabase[j]->getType() == -1) {
+												if (std::sqrt(pow(tiles[j]->getX() - robots[i]->getBox().x, 2) + pow(tiles[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
+													goalX = tiles[j]->getX();
+													goalY = tiles[j]->getY();
+													distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+												}
+											}
+										}
+									}
+								}
+
+								// Calculate f(n) = g(n) + h(n)
+								double f[4] = { 0 };
+
+								// where g(n) = visit history
+								int currentTile = robots[i]->getTile(tileDatabase);
+								int historyWeight = 100;
+
+								f[0] += (double)(historyWeight * robots[i]->getHistory(currentTile - MAP_WIDTH / WH));
+								f[1] += (double)(historyWeight * robots[i]->getHistory(currentTile + MAP_WIDTH / WH));
+								f[2] += (double)(historyWeight * robots[i]->getHistory(currentTile - 1));
+								f[3] += (double)(historyWeight * robots[i]->getHistory(currentTile + 1));
+
+								// h(n) = Euclidean distance from goal
+								f[0] -= std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y - WH, 2)); // Up
+								f[1] -= std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y + WH, 2)); // Down
+								f[2] -= std::sqrt(pow(goalX - robots[i]->getBox().x - WH, 2) + pow(goalY - robots[i]->getBox().y, 2)); // Left
+								f[3] -= std::sqrt(pow(goalX - robots[i]->getBox().x + WH, 2) + pow(goalY - robots[i]->getBox().y, 2)); // Right
+
+								// Check that robot is not moving to a blocked tile
+								for (int j = 0; j < MAX_TILES; j++) {
+									if (tileDatabase[j] != nullptr) {
+										// Check if adjacent tile type is walkable tile type
+										if (tileDatabase[j]->getType() != -1 && tileDatabase[j]->getType() != 1 && (tileDatabase[j]->getType() < 6 || tileDatabase[j]->getType() > 8)) {
+											if (tileDatabase[j]->getX() == robots[i]->getBox().x) {
+												if (tileDatabase[j]->getY() == robots[i]->getBox().y - WH) f[0] = std::numeric_limits<double>::infinity();
+												else if (tileDatabase[j]->getY() == robots[i]->getBox().y + WH) f[1] = std::numeric_limits<double>::infinity();
+											}
+											else if (tileDatabase[j]->getY() == robots[i]->getBox().y) {
+												if (tileDatabase[j]->getX() == robots[i]->getBox().x - WH) f[2] = std::numeric_limits<double>::infinity();
+												else if (tileDatabase[j]->getX() == robots[i]->getBox().x + WH) f[3] = std::numeric_limits<double>::infinity();
+											}
+										}
+
+										// Check if robot is at the edge of the map
+										if (robots[i]->getBox().x == 0) f[2] = std::numeric_limits<double>::infinity();
+										if (robots[i]->getBox().x == MAP_WIDTH - WH) f[3] = std::numeric_limits<double>::infinity();
+										if (robots[i]->getBox().y == 0) f[0] = std::numeric_limits<double>::infinity();
+										if (robots[i]->getBox().y == MAP_HEIGHT - WH) f[1] = std::numeric_limits<double>::infinity();
+									}
+								}
+
+								// Choose minimum f(n)
+								int bestAction = 0;
+								for (int j = 1; j < 4; j++) {
+									if (f[j] < f[bestAction]) {
+										bestAction = j;
+									}
+								}
+
+								// Check that that movement is not blocked by a robot
+								// If blocked and finding exit, pass item to that robot
+								int itemToPass = 0;
+								for (int j = 0; j < NUMBER_ROBOTS; j++) {
+									if (robots[j] != nullptr) {
+										if (robots[j]->getBox().x == robots[i]->getBox().x) {
+											if (robots[j]->getBox().y == robots[i]->getBox().y - WH) {
+												f[0] = std::numeric_limits<double>::infinity();
+
+												if (robots[j]->getBattery() > 0 && findExit && bestAction == 0 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
+													recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
+
+													// Find largest item that can be passed
+													for (int k = 0; k < MAX_WEIGHT; k++) {
+														if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
+													}
+
+													if (itemToPass > 0) {
+														passItemAway = true;
+														recipientRobot = j;
+														passDir = 0;
+														break;
+													}
+												}
+											}
+											else if (robots[j]->getBox().y == robots[i]->getBox().y + WH) {
+												f[1] = std::numeric_limits<double>::infinity();
+
+												if (robots[j]->getBattery() > 0 && findExit && bestAction == 1 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
+													recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
+
+													// Find largest item that can be passed
+													for (int k = 0; k < MAX_WEIGHT; k++) {
+														if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
+													}
+
+													if (itemToPass > 0) {
+														passItemAway = true;
+														recipientRobot = j;
+														passDir = 1;
 														break;
 													}
 												}
 											}
 										}
-										// If no known shelf with an item in predItemList exists, explore
-										if (!findShelf) explore = true;
-									}
-									else {
-										// Look for closest exit
-										for (int j = 0; j < MAX_TILES; j++) {
-											if (tileDatabase[j] != nullptr) {
-												if (tileDatabase[j]->getType() == 8) {
-													if (std::sqrt(pow(tileDatabase[j]->getX() - robots[i]->getBox().x, 2) + pow(tileDatabase[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
-														goalX = tileDatabase[j]->getX();
-														goalY = tileDatabase[j]->getY();
-														distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
-														findExit = true;
+										else if (robots[j]->getBox().y == robots[i]->getBox().y) {
+											if (robots[j]->getBox().x == robots[i]->getBox().x - WH) {
+												f[2] = std::numeric_limits<double>::infinity();
 
-														if (distance == 0 && robots[i]->getWeight() > 0) submit = true;
+												if (robots[j]->getBattery() > 0 && findExit && bestAction == 2 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
+													recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
+
+													// Find largest item that can be passed
+													for (int k = 0; k < MAX_WEIGHT; k++) {
+														if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
+													}
+
+													if (itemToPass > 0) {
+														passItemAway = true;
+														recipientRobot = j;
+														passDir = 2;
+														break;
+													}
+												}
+											}
+											else if (robots[j]->getBox().x == robots[i]->getBox().x + WH) {
+												f[3] = std::numeric_limits<double>::infinity();
+
+												if (robots[j]->getBattery() > 0 && findExit && bestAction == 3 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
+													recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
+
+													// Find largest item that can be passed
+													for (int k = 0; k < MAX_WEIGHT; k++) {
+														if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
+													}
+
+													if (itemToPass > 0) {
+														passItemAway = true;
+														recipientRobot = j;
+														passDir = 3;
+														break;
 													}
 												}
 											}
 										}
-										// If no known exit in database, explore
-										if (!findExit) explore = true;
 									}
 								}
+
+								// Choose minimum f(n)
+								bestAction = 0;
+								for (int j = 1; j < 4; j++) {
+									if (f[j] < f[bestAction]) {
+										bestAction = j;
+									}
+								}
+
+								// Prints to check on robots
+								/*printf("\nRobot %d\n", i);
+								printf("\nStatus:\t [0]: %lf [1]: %lf [2]: %lf [3]: %lf\n", f[0], f[1], f[2], f[3]);
+								printf("Weight: %d\n", robots[i]->getWeight());
+								printf("Items: ");
+								for (int j = 0; j < MAX_WEIGHT; j++) {
+									printf("%d ", robots[i]->getItem(j));
+								}
+								printf("\n\tsubmit: %d\n", submit);
+								printf("\tchargeBattery: %d\n", chargeBattery);
+								printf("\ttakeItemFromShelf: %d\n", takeItemFromShelf);
+								printf("\tfindShelf: %d\n", findShelf);
+								printf("\tfindExit: %d\n", findExit);
+								printf("\tfindCharger: %d\n", findCharger);
+								printf("\texplore: %d\n", explore);
+								printf("\treceivingItem: %d\n", receivingItem[i]);
+								printf("\twaitingForCharger: %d\n", waitingForCharger);
+								printf("\trescueRobot: %d\n", rescueRobot);*/
+								//for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
+								//	if (predItemList[j] != 0) printf("%d ", predItemList[j]);
+								//}
+
+								// Decide action
+								// If waiting for charger, stay still and reset history
+								if (waitingForCharger) robots[i]->resetHistory();
+								// If receiving item, stay still
+								else if (!receivingItem[i]) {
+									if (submit) {
+										robots[i]->submitItems(tileDatabase, itemList);
+										robots[i]->resetHistory();
+									}
+									else if (chargeBattery) {
+										robots[i]->charge(tileDatabase);
+										robots[i]->resetHistory();
+									}
+									else if (takeRobotItems) {
+										// Turn to dead robot if not already facing it
+										if (robots[i]->getDir() != takeDir) robots[i]->turn(takeDir);
+										// Take item from dead robot
+										else {
+											robots[i]->takeRobotItem(tiles, robots);
+											robots[i]->resetHistory();
+										}
+									}
+									else if (takeItemFromShelf) {
+										// Turn to shelf if not already facing it
+										if (robots[i]->getDir() != takeDir) robots[i]->turn(takeDir);
+										// Take item from shelf
+										else {
+											robots[i]->takeShelfItem(tiles, predItemList);
+											robots[i]->resetHistory();
+										}
+									}
+									else if (passItemAway) {
+										if (robots[i]->getDir() != passDir) robots[i]->turn(passDir);
+										else {
+											robots[i]->passItem(robots, tileDatabase, itemToPass);
+											receivingItem[recipientRobot] = true;
+										}
+									}
+									// Turn to direction if not already facing it
+									else if (robots[i]->getDir() != bestAction) robots[i]->turn(bestAction);
+									// Move
+									else robots[i]->move(tiles, robots);
+								}
+
+								robots[i]->sight(tiles, tileDatabase);
+								robots[i]->updateHistory(tileDatabase);
+
+								itemsRetrieved = 0;
+								for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
+									if (itemList[j] == 0) itemsRetrieved++;
+								}
+								if (itemsRetrieved == NUMBER_ITEMS_RETRIEVE) {
+									printf("Completed!\n");
+									quit = true;
+									finishSimulation = true;
+								}
 							}
-							// Exploration
-							if (explore) {
-								// Look for the nearest unknown tile
-								for (int j = 0; j < MAX_TILES; j++) {
-									if (tileDatabase[j] != nullptr) {
-										if (tileDatabase[j]->getType() == -1) {
-											if (std::sqrt(pow(tiles[j]->getX() - robots[i]->getBox().x, 2) + pow(tiles[j]->getY() - robots[i]->getBox().y, 2)) < distance) {
-												goalX = tiles[j]->getX();
-												goalY = tiles[j]->getY();
-												distance = std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2));
+							// If robot battery is <= 0
+							else {
+								double distance = std::numeric_limits<double>::infinity();
+
+								// Find closest surviving robot with sufficient battery
+								for (int j = 0; j < MAX_ROBOTS; j++) {
+									if (robots[j] != nullptr) {
+										if (robots[j]->getBattery() >= 50) {
+											if (std::sqrt(pow(robots[j]->getBox().x - robots[i]->getBox().x, 2) + pow(robots[j]->getBox().y - robots[i]->getBox().y, 2)) < distance) {
+												distance = std::sqrt(pow(robots[j]->getBox().x - robots[i]->getBox().x, 2) + pow(robots[j]->getBox().y - robots[i]->getBox().y, 2));
+												deadRobot[i] = j;
 											}
 										}
 									}
 								}
-							}
-
-							// Calculate f(n) = g(n) + h(n)
-							double f[4] = { 0 };
-
-							// where g(n) = visit history
-							int currentTile = robots[i]->getTile(tileDatabase);
-							int historyWeight = 100;
-
-							f[0] += (double)(historyWeight * robots[i]->getHistory(currentTile - MAP_WIDTH / WH));
-							f[1] += (double)(historyWeight * robots[i]->getHistory(currentTile + MAP_WIDTH / WH));
-							f[2] += (double)(historyWeight * robots[i]->getHistory(currentTile - 1));
-							f[3] += (double)(historyWeight * robots[i]->getHistory(currentTile + 1));
-
-							// h(n) = Euclidean distance from goal
-							f[0] -= std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y - WH, 2)); // Up
-							f[1] -= std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y + WH, 2)); // Down
-							f[2] -= std::sqrt(pow(goalX - robots[i]->getBox().x - WH, 2) + pow(goalY - robots[i]->getBox().y, 2)); // Left
-							f[3] -= std::sqrt(pow(goalX - robots[i]->getBox().x + WH, 2) + pow(goalY - robots[i]->getBox().y, 2)); // Right
-
-							// Check that robot is not moving to a blocked tile
-							for (int j = 0; j < MAX_TILES; j++) {
-								if (tileDatabase[j] != nullptr) {
-									// Check if adjacent tile type is walkable tile type
-									if (tileDatabase[j]->getType() != -1 && tileDatabase[j]->getType() != 1 && (tileDatabase[j]->getType() < 6 || tileDatabase[j]->getType() > 8)) {
-										if (tileDatabase[j]->getX() == robots[i]->getBox().x) {
-											if (tileDatabase[j]->getY() == robots[i]->getBox().y - WH) f[0] = std::numeric_limits<double>::infinity();
-											else if (tileDatabase[j]->getY() == robots[i]->getBox().y + WH) f[1] = std::numeric_limits<double>::infinity();
-										}
-										else if (tileDatabase[j]->getY() == robots[i]->getBox().y) {
-											if (tileDatabase[j]->getX() == robots[i]->getBox().x - WH) f[2] = std::numeric_limits<double>::infinity();
-											else if (tileDatabase[j]->getX() == robots[i]->getBox().x + WH) f[3] = std::numeric_limits<double>::infinity();
-										}
-									}
-
-									// Check if robot is at the edge of the map
-									if (robots[i]->getBox().x == 0) f[2] = std::numeric_limits<double>::infinity();
-									if (robots[i]->getBox().x == MAP_WIDTH - WH) f[3] = std::numeric_limits<double>::infinity();
-									if (robots[i]->getBox().y == 0) f[0] = std::numeric_limits<double>::infinity();
-									if (robots[i]->getBox().y == MAP_HEIGHT - WH) f[1] = std::numeric_limits<double>::infinity();
-								}
-							}
-
-							// Choose minimum f(n)
-							int bestAction = 0;
-							for (int j = 1; j < 4; j++) {
-								if (f[j] < f[bestAction]) {
-									bestAction = j;
-								}
-							}
-
-							// Check that that movement is not blocked by a robot
-							// If blocked and finding exit, pass item to that robot
-							int itemToPass = 0;
-							for (int j = 0; j < NUMBER_ROBOTS; j++) {
-								if (robots[j] != nullptr) {
-									if (robots[j]->getBox().x == robots[i]->getBox().x) {
-										if (robots[j]->getBox().y == robots[i]->getBox().y - WH) {
-											f[0] = std::numeric_limits<double>::infinity();
-
-											if (robots[j]->getBattery() > 0 && findExit && bestAction == 0 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
-												recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
-
-												// Find largest item that can be passed
-												for (int k = 0; k < MAX_WEIGHT; k++) {
-													if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
-												}
-
-												if (itemToPass > 0) {
-													passItemAway = true;
-													recipientRobot = j;
-													passDir = 0;
-													break;
-												}
-											}
-										}
-										else if (robots[j]->getBox().y == robots[i]->getBox().y + WH) {
-											f[1] = std::numeric_limits<double>::infinity();
-
-											if (robots[j]->getBattery() > 0 && findExit && bestAction == 1 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
-												recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
-
-												// Find largest item that can be passed
-												for (int k = 0; k < MAX_WEIGHT; k++) {
-													if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
-												}
-
-												if (itemToPass > 0) {
-													passItemAway = true;
-													recipientRobot = j;
-													passDir = 1;
-													break;
-												}
-											}
-										}
-									}
-									else if (robots[j]->getBox().y == robots[i]->getBox().y) {
-										if (robots[j]->getBox().x == robots[i]->getBox().x - WH) {
-											f[2] = std::numeric_limits<double>::infinity();
-
-											if (robots[j]->getBattery() > 0 && findExit && bestAction == 2 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
-												recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
-
-												// Find largest item that can be passed
-												for (int k = 0; k < MAX_WEIGHT; k++) {
-													if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
-												}
-
-												if (itemToPass > 0) {
-													passItemAway = true;
-													recipientRobot = j;
-													passDir = 2;
-													break;
-												}
-											}
-										}
-										else if (robots[j]->getBox().x == robots[i]->getBox().x + WH) {
-											f[3] = std::numeric_limits<double>::infinity();
-
-											if (robots[j]->getBattery() > 0 && findExit && bestAction == 3 && robots[j]->getWeight() < MAX_WEIGHT && std::sqrt(pow(goalX - robots[j]->getBox().x, 2) + pow(goalY - robots[j]->getBox().y, 2)) < std::sqrt(pow(goalX - robots[i]->getBox().x, 2) + pow(goalY - robots[i]->getBox().y, 2))) {
-												recipientSpace = MAX_WEIGHT - robots[recipientRobot]->getWeight();
-
-												// Find largest item that can be passed
-												for (int k = 0; k < MAX_WEIGHT; k++) {
-													if (weightOf(robots[i]->getItem(k)) > weightOf(itemToPass) && weightOf(robots[i]->getItem(k)) <= recipientSpace) itemToPass = robots[i]->getItem(k);
-												}
-
-												if (itemToPass > 0) {
-													passItemAway = true;
-													recipientRobot = j;
-													passDir = 3;
-													break;
-												}
-											}
-										}
-									}
-								}
-							}
-
-							// Choose minimum f(n)
-							bestAction = 0;
-							for (int j = 1; j < 4; j++) {
-								if (f[j] < f[bestAction]) {
-									bestAction = j;
-								}
-							}
-
-							/*printf("\nRobot %d\n", i);
-							printf("\nStatus:\t [0]: %lf [1]: %lf [2]: %lf [3]: %lf\n", f[0], f[1], f[2], f[3]);
-							printf("Weight: %d\n", robots[i]->getWeight());
-							printf("Items: ");
-							for (int j = 0; j < MAX_WEIGHT; j++) {
-								printf("%d ", robots[i]->getItem(j));
-							}
-							printf("\n\tsubmit: %d\n", submit);
-							printf("\tchargeBattery: %d\n", chargeBattery);
-							printf("\ttakeItemFromShelf: %d\n", takeItemFromShelf);
-							printf("\tfindShelf: %d\n", findShelf);
-							printf("\tfindExit: %d\n", findExit);
-							printf("\tfindCharger: %d\n", findCharger);
-							printf("\texplore: %d\n", explore);
-							printf("\treceivingItem: %d\n", receivingItem[i]);
-							printf("\twaitingForCharger: %d\n", waitingForCharger);*/
-							//for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
-							//	if (predItemList[j] != 0) printf("%d ", predItemList[j]);
-							//}
-
-							// Decide action
-							// If waiting for charger, stay still and reset history
-							if (waitingForCharger) robots[i]->resetHistory();
-							// If receiving item, stay still
-							else if (!receivingItem[i]) {
-								if (submit) {
-									robots[i]->submitItems(tileDatabase, itemList);
-									robots[i]->resetHistory();
-								}
-								else if (chargeBattery) {
-									robots[i]->charge(tileDatabase);
-									robots[i]->resetHistory();
-								}
-								else if (takeItemFromShelf) {
-									// Turn to shelf if not already facing it
-									if (robots[i]->getDir() != takeDir) robots[i]->turn(takeDir);
-									// Take item from shelf
-									else robots[i]->takeShelfItem(tiles, predItemList);
-									robots[i]->resetHistory();
-								}
-								else if (passItemAway) {
-									if (robots[i]->getDir() != passDir) robots[i]->turn(passDir);
-									else {
-										robots[i]->passItem(robots, tileDatabase, itemToPass);
-										receivingItem[recipientRobot] = true;
-									}
-								}
-								// Turn to direction if not already facing it
-								else if (robots[i]->getDir() != bestAction) robots[i]->turn(bestAction);
-								// Move
-								else robots[i]->move(tiles, robots);
-							}
-
-							robots[i]->sight(tiles, tileDatabase);
-							robots[i]->updateHistory(tileDatabase);
-
-							itemsRetrieved = 0;
-							for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
-								if (itemList[j] == 0) itemsRetrieved++;
-							}
-							if (itemsRetrieved == NUMBER_ITEMS_RETRIEVE) {
-								printf("Completed!\n");
-								quit = true;
-								finishSimulation = true;
 							}
 						}
 					}
@@ -1928,6 +2108,14 @@ void simulation() {
 			SDL_RenderPresent(renderer);
 		}
 	}
+
+	// Count dead robots
+	for (int i = 0; i < MAX_ROBOTS; i++) {
+		if (robots[i] != nullptr) {
+			if (robots[i]->getBattery() <= 0) numDeadRobots++;
+		}
+	}
+
 	// Delete tiles
 	for (int i = 0; i < MAX_TILES; i++) {
 		if (tiles[i] != nullptr) {
@@ -1967,6 +2155,7 @@ void simulation() {
 		printf("Total Ticks: %d\n", ticks);
 		if (itemsRetrieved > 0) printf("Average ticks per item: %f\n", (float)ticks / (float)itemsRetrieved);
 		printf("Items retrieved: %d\n", itemsRetrieved);
+		printf("Number of dead robots: %d\n", numDeadRobots);
 
 		/*int throwaway = 0;
 		printf("\nEnter any number to exit.\n");
