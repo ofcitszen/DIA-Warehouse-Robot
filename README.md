@@ -9,4 +9,4 @@ In the simulation:
 - Press E to zoom in.
 - Press R to reset the camera position and zoom
 - Use the arrow keys to move the camera.
-- Press TAB to toggle between the view of the actual map and the view of the map known by the robots.
+- Press TAB to toggle between the view of the map known by the robots (default) and the view of the actual map.
