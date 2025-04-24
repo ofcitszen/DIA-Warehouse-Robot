@@ -2041,7 +2041,7 @@ void simulation() {
 								// Find closest surviving robot with sufficient battery
 								for (int j = 0; j < MAX_ROBOTS; j++) {
 									if (robots[j] != nullptr) {
-										if (robots[j]->getBattery() >= 50) {
+										if (robots[j]->getBattery() >= 50 && robots[j]->getWeight() == 0) {
 											if (std::sqrt(pow(robots[j]->getBox().x - robots[i]->getBox().x, 2) + pow(robots[j]->getBox().y - robots[i]->getBox().y, 2)) < distance) {
 												distance = std::sqrt(pow(robots[j]->getBox().x - robots[i]->getBox().x, 2) + pow(robots[j]->getBox().y - robots[i]->getBox().y, 2));
 												deadRobot[i] = j;
