@@ -49,6 +49,7 @@ constexpr int BUTTON_SPRITES = 3;
 constexpr int MAX_BUTTONS = 10;
 
 // Time control
+Uint64 MAX_TICK_INTERVAL = 1000;
 Uint64 TICK_INTERVAL = 0;
 
 // Obstacle-generating cooldown in number of ticks
@@ -1269,10 +1270,11 @@ void menu() {
 	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
 
 	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
-	buttons[4] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 170, "Next"); // Change map number
-	buttons[5] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 50, "Change"); // Change number of robots
-	buttons[6] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 270, "Change"); // Change number of obstacles
-	for (int i = 3; i < 7; i++) buttons[i]->setShown();
+	buttons[4] = new Button(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 170, "Next"); // Change map number
+	buttons[5] = new Button(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 + 50, "Change"); // Change number of robots
+	buttons[6] = new Button(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 + 50, "Change"); // Change number of obstacles
+	buttons[7] = new Button(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 170, "Change"); // Change tick speed
+	for (int i = 3; i < 8; i++) buttons[i]->setShown();
 	// Main loop
 	bool quit = false;
 	bool startSimulation = false;
@@ -1293,7 +1295,7 @@ void menu() {
 			// Settings button and Back button
 			if (buttons[1]->isShown() && buttons[1]->handleEvents(e) || buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
 				changeSettings = !changeSettings;
-				for (int i = 0; i < 7; i++) buttons[i]->setShown();
+				for (int i = 0; i < 8; i++) buttons[i]->setShown();
 			}
 
 			// Quit button
@@ -1360,6 +1362,12 @@ void menu() {
 
 				if (NUMBER_OBSTACLES > MAX_OBSTACLES) NUMBER_OBSTACLES = 0;
 			}
+
+			// Change tick speed
+			if (buttons[7]->isShown() && buttons[7]->handleEvents(e)) {
+				TICK_INTERVAL += 100;
+				if (TICK_INTERVAL > MAX_TICK_INTERVAL) TICK_INTERVAL = 0;
+			}
 		}
 
 		// Reset screen
@@ -1372,16 +1380,20 @@ void menu() {
 			renderTitle("Settings", (float)SCREEN_WIDTH / 2, 150, true);
 
 			textObj.str("");
-			textObj << "Map number: " << mapNumber;
-			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 - 280, true);
+			textObj << "Map Number: " << mapNumber;
+			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 4, (float)SCREEN_HEIGHT / 2 - 280, true);
+
+			textObj.str("");
+			textObj << "Tick Interval: " << TICK_INTERVAL;
+			renderTitle(textObj.str().c_str(), (float)3 * SCREEN_WIDTH / 4, (float)SCREEN_HEIGHT / 2 - 280, true);
 
 			textObj.str("");
 			textObj << "Number of Robots: " << NUMBER_ROBOTS;
-			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 - 60, true);
+			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 4, (float)SCREEN_HEIGHT / 2 - 60, true);
 
 			textObj.str("");
 			textObj << "Number of Obstacles: " << NUMBER_OBSTACLES;
-			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 2, (float)SCREEN_HEIGHT / 2 + 160, true);
+			renderTitle(textObj.str().c_str(), (float)3 * SCREEN_WIDTH / 4, (float)SCREEN_HEIGHT / 2 - 60, true);
 		}
 
 		// Render buttons
