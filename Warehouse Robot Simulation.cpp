@@ -1384,7 +1384,7 @@ void menu() {
 			renderTitle(textObj.str().c_str(), (float)SCREEN_WIDTH / 4, (float)SCREEN_HEIGHT / 2 - 280, true);
 
 			textObj.str("");
-			textObj << "Tick Interval: " << TICK_INTERVAL;
+			textObj << "Tick Interval (ms): " << TICK_INTERVAL;
 			renderTitle(textObj.str().c_str(), (float)3 * SCREEN_WIDTH / 4, (float)SCREEN_HEIGHT / 2 - 280, true);
 
 			textObj.str("");
@@ -1430,6 +1430,7 @@ void simulation() {
 	int ticks = 0;
 	int itemsRetrieved = 0;
 	int numDeadRobots = 0;
+	Uint64 runtime = SDL_GetTicks64();
 
 	// Initialise objects
 	Tile* tiles[MAX_TILES] = { nullptr };
@@ -2168,10 +2169,7 @@ void simulation() {
 		if (itemsRetrieved > 0) printf("Average ticks per item: %f\n", (float)ticks / (float)itemsRetrieved);
 		printf("Items retrieved: %d\n", itemsRetrieved);
 		printf("Number of dead robots: %d\n", numDeadRobots);
-
-		/*int throwaway = 0;
-		printf("\nEnter any number to exit.\n");
-		std::cin >> throwaway;*/
+		printf("Simulation run time: %f\n", (float)(SDL_GetTicks64() - runtime)/ (float)1000);
 	}
 }
 
