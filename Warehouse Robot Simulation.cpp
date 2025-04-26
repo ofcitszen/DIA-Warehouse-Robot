@@ -2245,7 +2245,7 @@ int simulation(bool saveResults, int iteration) {
 								}
 
 								// Check if run is doomed to fail or told to skip
-								if (numDeadRobots > 0.5 * NUMBER_ROBOTS || skip) {
+								if (numDeadRobots > 0.5 * NUMBER_ROBOTS || skip || (ticks > 5000 && saveResults)) {
 									// End the simulation
 									printf("Failed!\n");
 									if (saveResults) failedRuns++;
@@ -2371,7 +2371,6 @@ int simulation(bool saveResults, int iteration) {
 			printf("Items retrieved: %d\n", itemsRetrieved);
 			printf("Number of dead robots: %d\n", numDeadRobots);
 			printf("Simulation run time: %f\n", (float)(SDL_GetTicks64() - runtime) / (float)1000);
-			printf("-------------------------------------------\n");
 		}
 		else if (itemsRetrieved == 100) {
 			// Save results if run was successful
@@ -2380,6 +2379,7 @@ int simulation(bool saveResults, int iteration) {
 			numberDeadRobots[iteration] = numDeadRobots;
 			timeTaken[iteration] = (float)(SDL_GetTicks64() - runtime) / (float)1000;
 		}
+		printf("-------------------------------------------\n");
 
 		if (skip) return 2;
 	}
