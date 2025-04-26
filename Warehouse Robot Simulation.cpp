@@ -1284,13 +1284,51 @@ void resetMetrics() {
 	}
 }
 
+int runSimulation(int robots, int obstacles, std::ofstream& resultsFile) {
+	resetMetrics();
+	NUMBER_ROBOTS = robots;
+	NUMBER_OBSTACLES = obstacles;
+
+	int decide = 1;
+	for (int j = 0; j < TEST_ITERATIONS && decide == 1; j++) decide = simulation(true, j);
+
+	// Calculate average metrics
+	float averageTicksTaken = (float)0;
+	for (int m = 0; m < TEST_ITERATIONS; m++) averageTicksTaken += (float)ticksTaken[m];
+	averageTicksTaken /= (float)successfulRuns;
+
+	float averageTicksTakenPerItem = (float)0;
+	for (int m = 0; m < TEST_ITERATIONS; m++) averageTicksTakenPerItem += ticksTakenPerItem[m];
+	averageTicksTakenPerItem /= (float)successfulRuns;
+
+	float averageDeadRobots = (float)0;
+	for (int m = 0; m < TEST_ITERATIONS; m++) averageDeadRobots += (float)numberDeadRobots[m];
+	averageDeadRobots /= (float)successfulRuns;
+
+	float averageTimeTaken = (float)0;
+	for (int m = 0; m < TEST_ITERATIONS; m++) averageTimeTaken += timeTaken[m];
+	averageTimeTaken /= (float)successfulRuns;
+
+	resultsFile << "(Map: " << mapNumber << ", Robots: " << NUMBER_ROBOTS << ", Obstacles: " << NUMBER_OBSTACLES << ")\n";
+	resultsFile << "Successful Runs: " << successfulRuns << "\n";
+	resultsFile << "Failed Runs: " << failedRuns << "\n";
+	resultsFile << "Average Ticks Taken: " << averageTicksTaken << "\n";
+	resultsFile << "Average Ticks Taken Per Item: " << averageTicksTakenPerItem << "\n";
+	resultsFile << "Average Dead Robots: " << averageDeadRobots << "\n";
+	resultsFile << "Average Time Taken (seconds): " << averageTimeTaken << "\n";
+	resultsFile << "--------------------------------------------\n";
+
+	return decide;
+}
+
 // Main menu
 void menu() {
 	// Initialise variables
 	SDL_Event e;
 
 	// Create buttons
-	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
+	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 - 150, "Start");
+	buttons[9] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Test");
 	buttons[8] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Test All");
 	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Settings");
 	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
@@ -1307,6 +1345,7 @@ void menu() {
 	
 	bool quit = false;
 	bool startSimulation = false;
+	bool test = false;
 	bool testAll = false;
 	bool startTraining = false;
 	bool changeSettings = false;
@@ -1408,6 +1447,12 @@ void menu() {
 				quit = true;
 				testAll = true;
 			}
+
+			// Test
+			if (buttons[9]->isShown() && buttons[9]->handleEvents(e)) {
+				quit = true;
+				test = true;
+			}
 		}
 
 		// Reset screen
@@ -1456,15 +1501,83 @@ void menu() {
 
 	// Run simulation for the chosen settings
 	if (startSimulation) simulation(false, 0);
-	// Test all combinations of settings without rendering
+	// Test logical settings
+	else if (test) {
+		// Create a file
+		std::ofstream resultsFile("simulation test results.txt");
+
+		int decide = 1;
+		for (int i = 1; i <= 8 && decide != 0; i++) {
+			mapNumber = i;
+
+			switch (mapNumber) {
+			case 1:
+				MAP_WIDTH = 50 * WH;
+				MAP_HEIGHT = 50 * WH;
+				break;
+			case 2:
+				MAP_WIDTH = 50 * WH;
+				MAP_HEIGHT = 50 * WH;
+				break;
+			case 3:
+				MAP_WIDTH = 50 * WH;
+				MAP_HEIGHT = 50 * WH;
+				break;
+			case 4:
+				MAP_WIDTH = 25 * WH;
+				MAP_HEIGHT = 25 * WH;
+				break;
+			case 5:
+				MAP_WIDTH = 25 * WH;
+				MAP_HEIGHT = 25 * WH;
+				break;
+			case 6:
+				MAP_WIDTH = 100 * WH;
+				MAP_HEIGHT = 100 * WH;
+				break;
+			case 7:
+				MAP_WIDTH = 100 * WH;
+				MAP_HEIGHT = 100 * WH;
+				break;
+			case 8:
+				MAP_WIDTH = 100 * WH;
+				MAP_HEIGHT = 100 * WH;
+				break;
+			}
+
+			textObj.str("");
+			textObj << "warehouse_resources/map" << mapNumber << ".map";
+			mapPath = textObj.str().c_str();
+
+			switch (MAP_WIDTH) {
+			case 25 * WH:
+				if (decide != 0) decide = runSimulation(10, 15, resultsFile);
+				if (decide != 0) decide = runSimulation(20, 10, resultsFile);
+				if (decide != 0) decide = runSimulation(20, 5, resultsFile);
+				break;
+			case 50 * WH:
+				if (decide != 0) decide = runSimulation(15, 25, resultsFile);
+				if (decide != 0) decide = runSimulation(30, 15, resultsFile);
+				if (decide != 0) decide = runSimulation(50, 5, resultsFile);
+				break;
+			case 100 * WH:
+				if (decide != 0) decide = runSimulation(50, 100, resultsFile);
+				if (decide != 0) decide = runSimulation(100, 50, resultsFile);
+				if (decide != 0) decide = runSimulation(100, 100, resultsFile);
+				break;
+			}
+		}
+		resultsFile.close();
+	}
+	// Test all combinations of settings
 	else if (testAll) {
-		bool stop = false;
+		int decide = 1;
 
 		// Create a file
 		std::ofstream resultsFile("simulation test results.txt");
 
 		// i is the map number
-		for (int i = 1; i <= 8; i++) {
+		for (int i = 1; i <= 8 && decide != 0; i++) {
 			mapNumber = i;
 
 			switch (mapNumber) {
@@ -1507,52 +1620,15 @@ void menu() {
 			mapPath = textObj.str().c_str();
 
 			// j is the number of robots
-			for (int j = 1; j <= 100 && !stop; j += 10) {
+			for (int j = 1; j <= 100 && decide != 0; j += 10) {
 				if (j == 11) j--;
 				if (j > 1 && j <= 35) j -= 5;
-				NUMBER_ROBOTS = j;
 
 				// k is the number of obstacles
-				for (int k = 0; k <= 100 && !stop; k += 10) {
+				for (int k = 0; k <= 100 && decide != 0; k += 10) {
 					if (k > 0 && k <= 35) k -= 5;
-					NUMBER_OBSTACLES = k;
 
-					// Run a predefined number of iterations for each combination of settings
-					resetMetrics();
-					for (int l = 0; l < TEST_ITERATIONS && !stop; l++) {
-						int decide = simulation(true, l);
-						if (decide == 1) {
-							// Calculate average metrics
-							float averageTicksTaken = (float)0;
-							for (int m = 0; m < TEST_ITERATIONS; m++) averageTicksTaken += (float)ticksTaken[m];
-							averageTicksTaken /= (float)successfulRuns;
-
-							float averageTicksTakenPerItem = (float)0;
-							for (int m = 0; m < TEST_ITERATIONS; m++) averageTicksTakenPerItem += ticksTakenPerItem[m];
-							averageTicksTakenPerItem /= (float)successfulRuns;
-
-							float averageDeadRobots = (float)0;
-							for (int m = 0; m < TEST_ITERATIONS; m++) averageDeadRobots += (float)numberDeadRobots[m];
-							averageDeadRobots /= (float)successfulRuns;
-
-							float averageTimeTaken = (float)0;
-							for (int m = 0; m < TEST_ITERATIONS; m++) averageTimeTaken += timeTaken[m];
-							averageTimeTaken /= (float)successfulRuns;
-
-							resultsFile << "(Map: " << mapNumber << ", Robots: " << NUMBER_ROBOTS << ", Obstacles: " << NUMBER_OBSTACLES << ")\n";
-							resultsFile << "Successful Runs: " << successfulRuns << "\n";
-							resultsFile << "Failed Runs: " << failedRuns << "\n";
-							resultsFile << "Average Ticks Taken: " << averageTicksTaken << "\n";
-							resultsFile << "Average Ticks Taken Per Item: " << averageTicksTakenPerItem << "\n";
-							resultsFile << "Average Dead Robots: " << averageDeadRobots << "\n";
-							resultsFile << "Average Time Taken (seconds): " << averageTimeTaken << "\n";
-							resultsFile << "--------------------------------------------\n";
-						}
-						// Quit
-						else if (decide == 0) stop = true;
-						// Skip
-						else if (decide == 2) break;
-					}
+					decide = runSimulation(j, k, resultsFile);
 				}
 			}
 		}
@@ -1689,22 +1765,28 @@ int simulation(bool saveResults, int iteration) {
 					case SDLK_RIGHT: camVelX += camSpd; break;
 						// Zoom
 					case SDLK_w: // Out
-						if (SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5;
-						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
-						camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						if (!pause) {
+							if (SCREEN_SCALE > 0.5) SCREEN_SCALE -= 0.5;
+							camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
+							camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						}
 						break;
 					case SDLK_e: // In
-						if (SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5;
-						camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
-						camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						if (!pause) {
+							if (SCREEN_SCALE < 5.5) SCREEN_SCALE += 0.5;
+							camera.w = (float)SCREEN_WIDTH / SCREEN_SCALE;
+							camera.h = (float)SCREEN_HEIGHT / SCREEN_SCALE;
+						}
 						break;
 					case SDLK_r: // Reset
-						SCREEN_SCALE = 3;
-						camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
+						if (!pause) {
+							SCREEN_SCALE = 3;
+							camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
+						}
 						break;
 						// Switch between real layout and robots' knowledge of the layout
-					case SDLK_TAB: view = !view; break;
-					case SDLK_SPACE: skip = true; break;
+					case SDLK_TAB: if (!pause) view = !view; break;
+					case SDLK_SPACE: if (!pause) skip = true; break;
 					}
 				}
 
