@@ -7,6 +7,9 @@
 #include <string>
 #include <vector>
 
+// Number of iterations for each combination of settings when testing
+constexpr int TEST_ITERATIONS = 10;
+
 // Screen sizes
 int SCREEN_WIDTH = 1280;
 int SCREEN_HEIGHT = 720;
@@ -1256,30 +1259,59 @@ int setTiles(Tile* tiles[], Tile* tileDatabase[], std::string mapFile, int mapWi
 }
 
 // Just a function declaration
-void simulation();
+int simulation(bool saveResults, int iteration);
+
+// Initialise buttons
+Button* buttons[MAX_BUTTONS] = { nullptr };
+
+// Performance metrics
+int successfulRuns = 0;
+int failedRuns = 0;
+int ticksTaken[TEST_ITERATIONS] = { 0 };
+float ticksTakenPerItem[TEST_ITERATIONS] = { (float)0 };
+int numberDeadRobots[TEST_ITERATIONS] = { 0 };
+float timeTaken[TEST_ITERATIONS] = { (float)0 };
+
+void resetMetrics() {
+	successfulRuns = 0;
+	failedRuns = 0;
+
+	for (int i = 0; i < TEST_ITERATIONS; i++) {
+		ticksTaken[i] = 0;
+		ticksTakenPerItem[i] = (float)0;
+		numberDeadRobots[i] = 0;
+		timeTaken[i] = (float)0;
+	}
+}
 
 // Main menu
 void menu() {
 	// Initialise variables
 	SDL_Event e;
 
-	// Initialise buttons
-	Button* buttons[MAX_BUTTONS] = { nullptr };
+	// Create buttons
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Start");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 1 * 150, "Settings");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
+	buttons[8] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Test All");
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Settings");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
 
 	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Back");
 	buttons[4] = new Button(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 170, "Next"); // Change map number
 	buttons[5] = new Button(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 + 50, "Change"); // Change number of robots
 	buttons[6] = new Button(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 + 50, "Change"); // Change number of obstacles
 	buttons[7] = new Button(3 * SCREEN_WIDTH / 4, SCREEN_HEIGHT / 2 - 170, "Change"); // Change tick speed
-	for (int i = 3; i < 8; i++) buttons[i]->setShown();
-	// Main loop
+	// Hide settings buttons initially
+	for (int i = 3; i <= 7; i++) {
+		if (buttons[i] != nullptr) buttons[i]->setShown();
+	}
+	
 	bool quit = false;
 	bool startSimulation = false;
+	bool testAll = false;
 	bool startTraining = false;
 	bool changeSettings = false;
+
+	// Main loop
 	while (!quit) {
 		// Handle events
 		while (SDL_PollEvent(&e) != 0) {
@@ -1295,7 +1327,9 @@ void menu() {
 			// Settings button and Back button
 			if (buttons[1]->isShown() && buttons[1]->handleEvents(e) || buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
 				changeSettings = !changeSettings;
-				for (int i = 0; i < 8; i++) buttons[i]->setShown();
+				for (int i = 0; i < MAX_BUTTONS; i++) {
+					if (buttons[i] != nullptr) buttons[i]->setShown();
+				}
 			}
 
 			// Quit button
@@ -1368,6 +1402,12 @@ void menu() {
 				TICK_INTERVAL += 100;
 				if (TICK_INTERVAL > MAX_TICK_INTERVAL) TICK_INTERVAL = 0;
 			}
+
+			// Test All
+			if (buttons[8]->isShown() && buttons[8]->handleEvents(e)) {
+				quit = true;
+				testAll = true;
+			}
 		}
 
 		// Reset screen
@@ -1414,11 +1454,120 @@ void menu() {
 		}
 	}
 
-	if (startSimulation) simulation();
+	// Run simulation for the chosen settings
+	if (startSimulation) simulation(false, 0);
+	// Test all combinations of settings without rendering
+	else if (testAll) {
+		bool stop = false;
+
+		// Create a file
+		std::ofstream resultsFile("simulation test results.txt");
+
+		// i is the map number
+		for (int i = 1; i <= 8; i++) {
+			mapNumber = i;
+
+			switch (mapNumber) {
+			case 1:
+				MAP_WIDTH = 50 * WH;
+				MAP_HEIGHT = 50 * WH;
+				break;
+			case 2:
+				MAP_WIDTH = 50 * WH;
+				MAP_HEIGHT = 50 * WH;
+				break;
+			case 3:
+				MAP_WIDTH = 50 * WH;
+				MAP_HEIGHT = 50 * WH;
+				break;
+			case 4:
+				MAP_WIDTH = 25 * WH;
+				MAP_HEIGHT = 25 * WH;
+				break;
+			case 5:
+				MAP_WIDTH = 25 * WH;
+				MAP_HEIGHT = 25 * WH;
+				break;
+			case 6:
+				MAP_WIDTH = 100 * WH;
+				MAP_HEIGHT = 100 * WH;
+				break;
+			case 7:
+				MAP_WIDTH = 100 * WH;
+				MAP_HEIGHT = 100 * WH;
+				break;
+			case 8:
+				MAP_WIDTH = 100 * WH;
+				MAP_HEIGHT = 100 * WH;
+				break;
+			}
+
+			textObj.str("");
+			textObj << "warehouse_resources/map" << mapNumber << ".map";
+			mapPath = textObj.str().c_str();
+
+			// j is the number of robots
+			for (int j = 1; j <= 100 && !stop; j += 10) {
+				if (j == 11) j--;
+				if (j > 1 && j <= 35) j -= 5;
+				NUMBER_ROBOTS = j;
+
+				// k is the number of obstacles
+				for (int k = 0; k <= 100 && !stop; k += 10) {
+					if (k > 0 && k <= 35) k -= 5;
+					NUMBER_OBSTACLES = k;
+
+					// Run a predefined number of iterations for each combination of settings
+					resetMetrics();
+					for (int l = 0; l < TEST_ITERATIONS && !stop; l++) {
+						int decide = simulation(true, l);
+						if (decide == 1) {
+							// Calculate average metrics
+							float averageTicksTaken = (float)0;
+							for (int m = 0; m < TEST_ITERATIONS; m++) averageTicksTaken += (float)ticksTaken[m];
+							averageTicksTaken /= (float)successfulRuns;
+
+							float averageTicksTakenPerItem = (float)0;
+							for (int m = 0; m < TEST_ITERATIONS; m++) averageTicksTakenPerItem += ticksTakenPerItem[m];
+							averageTicksTakenPerItem /= (float)successfulRuns;
+
+							float averageDeadRobots = (float)0;
+							for (int m = 0; m < TEST_ITERATIONS; m++) averageDeadRobots += (float)numberDeadRobots[m];
+							averageDeadRobots /= (float)successfulRuns;
+
+							float averageTimeTaken = (float)0;
+							for (int m = 0; m < TEST_ITERATIONS; m++) averageTimeTaken += timeTaken[m];
+							averageTimeTaken /= (float)successfulRuns;
+
+							resultsFile << "(Map: " << mapNumber << ", Robots: " << NUMBER_ROBOTS << ", Obstacles: " << NUMBER_OBSTACLES << ")\n";
+							resultsFile << "Successful Runs: " << successfulRuns << "\n";
+							resultsFile << "Failed Runs: " << failedRuns << "\n";
+							resultsFile << "Average Ticks Taken: " << averageTicksTaken << "\n";
+							resultsFile << "Average Ticks Taken Per Item: " << averageTicksTakenPerItem << "\n";
+							resultsFile << "Average Dead Robots: " << averageDeadRobots << "\n";
+							resultsFile << "Average Ticks Taken: " << averageTimeTaken << "\n";
+							resultsFile << "--------------------------------------------\n";
+						}
+						// Quit
+						else if (decide == 0) stop = true;
+						// Skip
+						else if (decide == 2) break;
+					}
+				}
+			}
+		}
+
+		resultsFile.close();
+	}
 }
 
+// Initialise objects
+Tile* tiles[MAX_TILES] = { nullptr };
+Tile* tileDatabase[MAX_TILES] = { nullptr };
+Robot* robots[MAX_ROBOTS] = { nullptr };
+
 // Main simulation code
-void simulation() {
+int simulation(bool saveResults, int iteration) {
 	// Initialise variables
 	SDL_FRect camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
 	float camSpd = 10;
@@ -1432,15 +1581,14 @@ void simulation() {
 	int numDeadRobots = 0;
 	Uint64 runtime = SDL_GetTicks64();
 
-	// Initialise objects
-	Tile* tiles[MAX_TILES] = { nullptr };
-	Tile* tileDatabase[MAX_TILES] = { nullptr };
-	Robot* robots[MAX_ROBOTS] = { nullptr };
-	Button* buttons[MAX_BUTTONS] = { nullptr };
+	// Create buttons
 	buttons[0] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, "Resume");
-	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Finish");
-	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Quit");
-	for (int i = 0; i < 3; i++) buttons[i]->setShown();
+	buttons[1] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 2 * 150, "Finish");
+	buttons[3] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 3 * 150, "Quit");
+	buttons[2] = new Button(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2 + 150, "Menu");
+	for (int i = 0; i < MAX_BUTTONS; i++) {
+		if (buttons[i] != nullptr) buttons[i]->setShown();
+	}
 
 	// Random seed
 	srand((unsigned int)time(0));
@@ -1452,6 +1600,7 @@ void simulation() {
 	// Event flag
 	bool returnMenu = false;
 	bool finishSimulation = false;
+	bool skip = false;
 
 	// Create tiles based on map
 	numberOfShelves = setTiles(tiles, tileDatabase, mapPath, MAP_WIDTH, MAP_HEIGHT);
@@ -1500,12 +1649,20 @@ void simulation() {
 		bool receivingItem[MAX_ROBOTS] = { false };
 		bool chargerKnown = false;
 		int deadRobot[MAX_ROBOTS] = { -1 }; // index is the dead robot, value is the robot to rescue it
+		float currentGoal[MAX_ROBOTS] = { -1 }; // 0: explore, 1: shelf, 2: charger, 3: exit, 4: dead robot
 
-		// Main loop
+		// Print settings
+		printf("Running simulation %d for:\n", iteration + 1);
+		printf("> Map %d\n", mapNumber);
+		if (NUMBER_ROBOTS == 1) printf("> %d robot\n", NUMBER_ROBOTS);
+		else printf("> %d robots\n", NUMBER_ROBOTS);
+		printf("> %d obstacles\n\n", NUMBER_OBSTACLES);
+
 		bool quit = false;
 		bool pause = false;
 		bool view = false; // false: real layout, true: robots' knowledge of the layout
 
+		// Main loop
 		while (!quit) {
 			ticks++;
 
@@ -1519,7 +1676,9 @@ void simulation() {
 						// Pause by pressing ESC
 					case SDLK_ESCAPE:
 						pause = !pause;
-						for (int i = 0; i < 3; i++) buttons[i]->setShown();
+						for (int i = 0; i < MAX_BUTTONS; i++) {
+							if (buttons[i] != nullptr) buttons[i]->setShown();
+						}
 						break;
 						// Move camera using arrow keys
 					case SDLK_UP: camVelY -= camSpd; break;
@@ -1543,6 +1702,7 @@ void simulation() {
 						break;
 						// Switch between real layout and robots' knowledge of the layout
 					case SDLK_TAB: view = !view; break;
+					case SDLK_SPACE: skip = true; break;
 					}
 				}
 
@@ -1558,7 +1718,9 @@ void simulation() {
 				// Resume button
 				if (buttons[0]->isShown() && buttons[0]->handleEvents(e)) {
 					pause = !pause;
-					for (int i = 0; i < 3; i++) buttons[i]->setShown();
+					for (int i = 0; i < MAX_BUTTONS; i++) {
+						if (buttons[i] != nullptr) buttons[i]->setShown();
+					}
 				}
 
 				// Finish button
@@ -1568,7 +1730,16 @@ void simulation() {
 				}
 
 				// Quit button
-				if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) quit = true;
+				if (buttons[3]->isShown() && buttons[3]->handleEvents(e)) {
+					quit = true;
+					return 0;
+				}
+
+				// Menu button
+				if (buttons[2]->isShown() && buttons[2]->handleEvents(e)) {
+					quit = true;
+					returnMenu = true;
+				}
 			}
 
 			if (!pause) {
@@ -1704,6 +1875,10 @@ void simulation() {
 												// If no known chargers, explore to look for one
 												else explore = true;
 											}
+											else if (currentGoal[i] != 2) {
+												currentGoal[i] = 2;
+												robots[i]->resetHistory();
+											}
 										}
 										// If robot is assigned to rescue a dead robot and has no items in hand
 										else if (rescueRobot >= 0 && robots[i]->getWeight() == 0) {
@@ -1733,6 +1908,11 @@ void simulation() {
 													takeRobotItems = true;
 													takeDir = 2;
 												}
+											}
+
+											if (currentGoal[i] != 4) {
+												currentGoal[i] = 4;
+												robots[i]->resetHistory();
 											}
 										}
 										// If robot still has space for an item
@@ -1787,6 +1967,10 @@ void simulation() {
 											}
 											// If no known shelf with an item in predItemList exists, explore
 											if (!findShelf) explore = true;
+											else if (currentGoal[i] != 1) {
+												currentGoal[i] = 1;
+												robots[i]->resetHistory();
+											}
 										}
 										else {
 											// Look for closest exit
@@ -1806,6 +1990,10 @@ void simulation() {
 											}
 											// If no known exit in database, explore
 											if (!findExit) explore = true;
+											else if (currentGoal[i] != 3) {
+												currentGoal[i] = 3;
+												robots[i]->resetHistory();
+											}
 										}
 									}
 								}
@@ -1822,6 +2010,11 @@ void simulation() {
 												}
 											}
 										}
+									}
+
+									if (currentGoal[i] != 0) {
+										currentGoal[i] = 0;
+										robots[i]->resetHistory();
 									}
 								}
 
@@ -1993,35 +2186,22 @@ void simulation() {
 								//}
 
 								// Decide action
-								// If waiting for charger, stay still and reset history
-								if (waitingForCharger) robots[i]->resetHistory();
+								// If waiting for charger, stay still
 								// If receiving item, stay still
-								else if (!receivingItem[i]) {
-									if (submit) {
-										robots[i]->submitItems(tileDatabase, itemList);
-										robots[i]->resetHistory();
-									}
-									else if (chargeBattery) {
-										robots[i]->charge(tileDatabase);
-										robots[i]->resetHistory();
-									}
+								if (!waitingForCharger && !receivingItem[i]) {
+									if (submit) robots[i]->submitItems(tileDatabase, itemList);
+									else if (chargeBattery) robots[i]->charge(tileDatabase);
 									else if (takeRobotItems) {
 										// Turn to dead robot if not already facing it
 										if (robots[i]->getDir() != takeDir) robots[i]->turn(takeDir);
 										// Take item from dead robot
-										else {
-											robots[i]->takeRobotItem(tiles, robots);
-											robots[i]->resetHistory();
-										}
+										else robots[i]->takeRobotItem(tiles, robots);
 									}
 									else if (takeItemFromShelf) {
 										// Turn to shelf if not already facing it
 										if (robots[i]->getDir() != takeDir) robots[i]->turn(takeDir);
 										// Take item from shelf
-										else {
-											robots[i]->takeShelfItem(tiles, predItemList);
-											robots[i]->resetHistory();
-										}
+										else robots[i]->takeShelfItem(tiles, predItemList);
 									}
 									else if (passItemAway) {
 										if (robots[i]->getDir() != passDir) robots[i]->turn(passDir);
@@ -2039,12 +2219,34 @@ void simulation() {
 								robots[i]->sight(tiles, tileDatabase);
 								robots[i]->updateHistory(tileDatabase);
 
+								// Count items retrieved
 								itemsRetrieved = 0;
 								for (int j = 0; j < NUMBER_ITEMS_RETRIEVE; j++) {
 									if (itemList[j] == 0) itemsRetrieved++;
 								}
+								
+								// Check if all items have been successfully retrieved
 								if (itemsRetrieved == NUMBER_ITEMS_RETRIEVE) {
+									// End the simulation
 									printf("Completed!\n");
+									if (saveResults) successfulRuns++;
+									quit = true;
+									finishSimulation = true;
+								}
+
+								// Count dead robots
+								numDeadRobots = 0;
+								for (int i = 0; i < MAX_ROBOTS; i++) {
+									if (robots[i] != nullptr) {
+										if (robots[i]->getBattery() <= 0) numDeadRobots++;
+									}
+								}
+
+								// Check if run is doomed to fail or told to skip
+								if (numDeadRobots > 0.5 * NUMBER_ROBOTS || skip) {
+									// End the simulation
+									printf("Failed!\n");
+									if (saveResults) failedRuns++;
 									quit = true;
 									finishSimulation = true;
 								}
@@ -2053,7 +2255,7 @@ void simulation() {
 							else {
 								double distance = std::numeric_limits<double>::infinity();
 
-								// Find closest surviving robot with sufficient battery
+								// Find closest surviving robot with sufficient battery and no items on hand
 								for (int j = 0; j < MAX_ROBOTS; j++) {
 									if (robots[j] != nullptr) {
 										if (robots[j]->getBattery() >= 50 && robots[j]->getWeight() == 0) {
@@ -2124,13 +2326,6 @@ void simulation() {
 		}
 	}
 
-	// Count dead robots
-	for (int i = 0; i < MAX_ROBOTS; i++) {
-		if (robots[i] != nullptr) {
-			if (robots[i]->getBattery() <= 0) numDeadRobots++;
-		}
-	}
-
 	// Delete tiles
 	for (int i = 0; i < MAX_TILES; i++) {
 		if (tiles[i] != nullptr) {
@@ -2138,10 +2333,10 @@ void simulation() {
 			tiles[i] = nullptr;
 		}
 
-		/*if (tileDatabase[i] != nullptr) {
+		if (tileDatabase[i] != nullptr) {
 			delete tileDatabase[i];
 			tileDatabase[i] = nullptr;
-		}*/
+		}
 	}
 
 	// Delete robots
@@ -2167,12 +2362,27 @@ void simulation() {
 			if (itemList[i] == 0) itemsRetrieved++;
 		}
 
-		printf("Total Ticks: %d\n", ticks);
-		if (itemsRetrieved > 0) printf("Average ticks per item: %f\n", (float)ticks / (float)itemsRetrieved);
-		printf("Items retrieved: %d\n", itemsRetrieved);
-		printf("Number of dead robots: %d\n", numDeadRobots);
-		printf("Simulation run time: %f\n", (float)(SDL_GetTicks64() - runtime)/ (float)1000);
+		if (!saveResults) {
+			// Display results
+			printf("Total Ticks: %d\n", ticks);
+			if (itemsRetrieved > 0) printf("Average ticks per item: %f\n", (float)ticks / (float)itemsRetrieved);
+			printf("Items retrieved: %d\n", itemsRetrieved);
+			printf("Number of dead robots: %d\n", numDeadRobots);
+			printf("Simulation run time: %f\n", (float)(SDL_GetTicks64() - runtime) / (float)1000);
+			printf("-------------------------------------------\n");
+		}
+		else if (itemsRetrieved == 100) {
+			// Save results if run was successful
+			ticksTaken[iteration] = ticks;
+			ticksTakenPerItem[iteration] = (float)ticks / (float)itemsRetrieved;
+			numberDeadRobots[iteration] = numDeadRobots;
+			timeTaken[iteration] = (float)(SDL_GetTicks64() - runtime) / (float)1000;
+		}
+
+		if (skip) return 2;
 	}
+
+	return 1;
 }
 
 int main(int argc, char** argv) {
