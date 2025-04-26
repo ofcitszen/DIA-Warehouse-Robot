@@ -1684,7 +1684,7 @@ void simulation() {
 																			// Reset as if this charger is no longer a charger
 																			findCharger = false;
 																			distance = std::numeric_limits<double>::infinity();
-																			lookForNextCharger = true;
+																			if (distance > WH) waitingForCharger = true;
 																			break;
 																		}
 																	}
@@ -1695,13 +1695,8 @@ void simulation() {
 												}
 											}
 
-											if (!findCharger) {
-												// If nearest charger is taken by another robot, wait
-												if (lookForNextCharger && distance > WH) waitingForCharger = true;
-
-												// If no known chargers, explore to look for one
-												else explore = true;
-											}
+											// If no known chargers, explore to look for one
+											if (!findCharger) explore = true;
 										}
 										// If robot is assigned to rescue a dead robot and has no items in hand
 										else if (rescueRobot >= 0 && robots[i]->getWeight() == 0) {
