@@ -19,7 +19,7 @@ In the simulation:
 - Press ESC to pause.
 	- Under the pause menu:
 		- Press "Resume" to continue the simulation.
-		- Press "Menu" to return to the main menu.
+		- Press "Menu" to return to the main menu. (Disabled in "Test All" mode)
 		- Press "Finish" to prematurely finish this simulation and get the results.
 		- Press "Quit" to quit the program entirely.
 

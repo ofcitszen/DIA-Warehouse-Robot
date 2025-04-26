@@ -1545,7 +1545,7 @@ void menu() {
 							resultsFile << "Average Ticks Taken: " << averageTicksTaken << "\n";
 							resultsFile << "Average Ticks Taken Per Item: " << averageTicksTakenPerItem << "\n";
 							resultsFile << "Average Dead Robots: " << averageDeadRobots << "\n";
-							resultsFile << "Average Ticks Taken: " << averageTimeTaken << "\n";
+							resultsFile << "Average Time Taken (seconds): " << averageTimeTaken << "\n";
 							resultsFile << "--------------------------------------------\n";
 						}
 						// Quit
