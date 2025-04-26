@@ -1697,7 +1697,7 @@ void simulation() {
 
 											if (!findCharger) {
 												// If nearest charger is taken by another robot, wait
-												if (lookForNextCharger) waitingForCharger = true;
+												if (lookForNextCharger && distance > WH) waitingForCharger = true;
 
 												// If no known chargers, explore to look for one
 												else explore = true;
