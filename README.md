@@ -25,7 +25,8 @@ In the simulation:
 
 Exclusive to the "Test All" mode:
 - Once in the simulation, press SPACE BAR to skip all simulations for the current setting.
-- Failed simulations (either prematurely ended, skipped or simulations that are impossible to finish) will not have their results counted in the average results in the text file.
+- Simulations will fail if the number of ticks taken exceeds 5000.
+- Failed simulations (either prematurely ended, skipped or simulations that are impossible or take too long to finish) will not have their results counted in the average results in the text file.
 
 You can see which setting is currently being used by looking at the print statements in the terminal.
 
