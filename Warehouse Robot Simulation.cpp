@@ -2335,8 +2335,8 @@ int simulation(bool saveResults, int iteration) {
 									finishSimulation = true;
 								}
 							}
-							// If robot battery is <= 0
-							else {
+							// If robot battery is <= 0 and has items on it
+							else if (robots[i]->getWeight() > 0) {
 								double distance = std::numeric_limits<double>::infinity();
 
 								// Find closest surviving robot with sufficient battery and no items on hand
@@ -2351,6 +2351,7 @@ int simulation(bool saveResults, int iteration) {
 									}
 								}
 							}
+							else deadRobot[i] = 0;
 						}
 					}
 					lastTick = SDL_GetTicks64();
