@@ -10,3 +10,5 @@ In the simulation:
 - Press R to reset the camera position and zoom
 - Use the arrow keys to move the camera.
 - Press TAB to toggle between the view of the map known by the robots (default) and the view of the actual map.
+
+Unfortunately, this simulation is only available for Windows OS devices because the program file is a .exe file. To run it on other operating systems, you may consider using other tools to run it, such as by using Boot Camp to run Windows OS on a Mac.
