@@ -1590,6 +1590,8 @@ int simulation(bool saveResults, int iteration) {
 		if (buttons[i] != nullptr) buttons[i]->setShown();
 	}
 
+	if (saveResults) buttons[2]->disable();
+
 	// Random seed
 	srand((unsigned int)time(0));
 
