@@ -1683,8 +1683,8 @@ void simulation() {
 																		if (robots[k]->getBox().x == goalX && robots[k]->getBox().y == goalY) {
 																			// Reset as if this charger is no longer a charger
 																			findCharger = false;
-																			distance = std::numeric_limits<double>::infinity();
 																			if (distance > WH) waitingForCharger = true;
+																			distance = std::numeric_limits<double>::infinity();
 																			break;
 																		}
 																	}
