@@ -1662,6 +1662,7 @@ void simulation() {
 									if (!chargeBattery) {
 										// If robot is low on battery
 										if (robots[i]->getBattery() < 50 || !chargerKnown) {
+											double saveDistance = 0.0;
 											// Look for the closest battery charger
 											for (int j = 0; j < MAX_TILES; j++) {
 												if (tileDatabase[j] != nullptr) {
@@ -1683,7 +1684,8 @@ void simulation() {
 																		if (robots[k]->getBox().x == goalX && robots[k]->getBox().y == goalY) {
 																			// Reset as if this charger is no longer a charger
 																			findCharger = false;
-																			if (distance > WH) waitingForCharger = true;
+																			lookForNextCharger = true;
+																			saveDistance = distance;
 																			distance = std::numeric_limits<double>::infinity();
 																			break;
 																		}
@@ -1694,9 +1696,14 @@ void simulation() {
 													}
 												}
 											}
+											
+											if (!findCharger) {
+												// Waiting for charger
+												if (lookForNextCharger && saveDistance > WH) waitingForCharger = true;
 
-											// If no known chargers, explore to look for one
-											if (!findCharger) explore = true;
+												// If no known chargers, explore to look for one
+												else explore = true;
+											}
 										}
 										// If robot is assigned to rescue a dead robot and has no items in hand
 										else if (rescueRobot >= 0 && robots[i]->getWeight() == 0) {
