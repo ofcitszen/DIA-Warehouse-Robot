@@ -52,7 +52,7 @@ constexpr int BUTTON_SPRITES = 3;
 constexpr int MAX_BUTTONS = 10;
 
 // Time control
-Uint64 MAX_TICK_INTERVAL = 1000;
+Uint64 MAX_TICK_INTERVAL = 500;
 Uint64 TICK_INTERVAL = 0;
 
 // Obstacle-generating cooldown in number of ticks
@@ -1130,7 +1130,7 @@ bool init() {
 		printf("SDL_CreateWindow() error: %s\n", SDL_GetError());
 		return false;
 	}
-	if (!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC))) {
+	if (!(renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED))) {
 		printf("SDL_CreateRenderer() error: %s\n", SDL_GetError());
 		return false;
 	}
@@ -1438,7 +1438,8 @@ void menu() {
 
 			// Change tick speed
 			if (buttons[7]->isShown() && buttons[7]->handleEvents(e)) {
-				TICK_INTERVAL += 100;
+				if (TICK_INTERVAL < 50) TICK_INTERVAL += 10;
+				else TICK_INTERVAL += 50;
 				if (TICK_INTERVAL > MAX_TICK_INTERVAL) TICK_INTERVAL = 0;
 			}
 
@@ -1778,7 +1779,7 @@ int simulation(bool saveResults, int iteration) {
 						break;
 					case SDLK_r: // Reset
 						if (!pause) {
-							SCREEN_SCALE = 3;
+							SCREEN_SCALE = 1.5;
 							camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
 						}
 						break;
