@@ -40,3 +40,5 @@ The source code of the simulation is contained within Warehouse Robot Simulation
 Unfortunately, this simulation is only available for Windows OS devices because the program file is a .exe file. To run it on other operating systems, you may consider using other tools to run it, such as by using Boot Camp to run Windows OS on a Mac.
 
 If you wish to edit and compile the code on your own, please refer to this guide on installing and using the SDL2 library: https://lazyfoo.net/tutorials/SDL/
+
+The font used in the program is the Pixellari font, created and provided for free by https://github.com/zedseven.
