@@ -946,10 +946,45 @@ public:
 
 	void sight(Tile* tiles[], Tile* tileDatabase[]) {
 		int currentTile = getTile(tiles);
-		int sightRange = 10;
+		int sightRange = 10 + 1;
 		int map_width = MAP_WIDTH / WH;
 		int map_height = MAP_HEIGHT / WH;
 
+		// Record tiles around the robot
+		// Up
+		if (currentTile - map_width >= 0) {
+			if (tiles[currentTile - map_width] != nullptr) {
+				tileDatabase[currentTile - map_width]->setTileType(tiles[currentTile - map_width]->getType());
+				tileDatabase[currentTile - map_width]->setItem(tiles[currentTile - map_width]->getItem());
+				tileDatabase[currentTile - map_width]->setWeight(tiles[currentTile - map_width]->getWeight());
+			}
+		}
+		// Down
+		if (currentTile + map_width < map_width * map_height) {
+			if (tiles[currentTile - map_width] != nullptr) {
+				tileDatabase[currentTile + map_width]->setTileType(tiles[currentTile + map_width]->getType());
+				tileDatabase[currentTile + map_width]->setItem(tiles[currentTile + map_width]->getItem());
+				tileDatabase[currentTile + map_width]->setWeight(tiles[currentTile + map_width]->getWeight());
+			}
+		}
+		// Left
+		if (currentTile % map_width != 0) {
+			if (tiles[currentTile - 1] != nullptr) {
+				tileDatabase[currentTile - 1]->setTileType(tiles[currentTile - 1]->getType());
+				tileDatabase[currentTile - 1]->setItem(tiles[currentTile - 1]->getItem());
+				tileDatabase[currentTile - 1]->setWeight(tiles[currentTile - 1]->getWeight());
+			}
+		}
+		// Right
+		if (currentTile % map_width != map_width - 1) {
+			if (tiles[currentTile - 1] != nullptr) {
+				tileDatabase[currentTile + 1]->setTileType(tiles[currentTile + 1]->getType());
+				tileDatabase[currentTile + 1]->setItem(tiles[currentTile + 1]->getItem());
+				tileDatabase[currentTile + 1]->setWeight(tiles[currentTile + 1]->getWeight());
+			}
+		}
+
+		// Record tiles up to 10 tiles ahead of the robot
 		bool stop = false;
 		for (int i = 0; i < sightRange && !stop; i++) {
 			if (tiles[currentTile] != nullptr) {
@@ -1955,7 +1990,10 @@ int simulation(bool saveResults, int iteration) {
 											
 											if (!findCharger) {
 												// Waiting for charger
-												if (lookForNextCharger && saveDistance > WH) waitingForCharger = true;
+												if (lookForNextCharger && saveDistance > WH) {
+													waitingForCharger = true;
+													robots[i]->resetHistory();
+												}
 
 												// If no known chargers, explore to look for one
 												else explore = true;
