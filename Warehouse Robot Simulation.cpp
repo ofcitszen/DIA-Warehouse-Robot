@@ -1742,8 +1742,6 @@ int simulation(bool saveResults, int iteration) {
 
 		// Main loop
 		while (!quit) {
-			ticks++;
-
 			// Handle events
 			while (SDL_PollEvent(&e) != 0) {
 				// The close button
@@ -1864,6 +1862,8 @@ int simulation(bool saveResults, int iteration) {
 
 				// Process robots
 				if (SDL_GetTicks64() - lastTick > TICK_INTERVAL) {
+					ticks++;
+
 					// The entire decision and pathfinding algorithm is in this for-loop
 					for (int i = 0; i < MAX_ROBOTS && !quit; i++) {
 						if (robots[i] != nullptr) {
