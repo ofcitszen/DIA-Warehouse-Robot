@@ -6,8 +6,8 @@ To run the simulation, drag or copy the warehouse_resources folder into the x64/
 
 In the main menu:
 - Press "Start" to start a single simulation for the chosen Settings.
-- Press "Test" to run 10 simulations for 9 predefined logical combinations of settings and output the results into a text file
-- Press "Test All" to run 10 simulations for all combinations of settings and output the results into a text file in the same folder as the .exe file.
+- Press "Test" to run 10 simulations for 24 predefined, logical combinations of settings and output the results into a text file (Estimated time: 3 hours)
+- Press "Test All" to run 10 simulations for all 1568 combinations of settings and output the results into a text file in the same folder as the .exe file. (Estimated time: 196 hours)
 - Press "Settings" to change the Settings.
 - Press "Quit" to close the program.
 
