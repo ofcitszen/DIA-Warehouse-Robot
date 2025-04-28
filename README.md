@@ -2,6 +2,8 @@
 
 To run the simulation, drag or copy the warehouse_resources folder into the x64/Debug folder and then open the .exe file inside the x64/Debug folder. You may need to grant permission to the .exe file for it to run. You will also need C++ installed on your device to run it. An easy way to do so is to install Microsoft Visual Studio.
 
+If the program does not fit on your screen (text and buttons in the main menu go out of your screen), please set your screen scale in your display settings to 100%.
+
 ------------------------------------------------------------------------------------
 
 In the main menu:
