@@ -1791,6 +1791,8 @@ int simulation(bool saveResults, int iteration) {
 						for (int i = 0; i < MAX_BUTTONS; i++) {
 							if (buttons[i] != nullptr) buttons[i]->setShown();
 						}
+						camVelX = 0;
+						camVelY = 0;
 						break;
 						// Move camera using arrow keys
 					case SDLK_UP: camVelY -= camSpd; break;
@@ -1816,6 +1818,8 @@ int simulation(bool saveResults, int iteration) {
 						if (!pause) {
 							SCREEN_SCALE = 1.5;
 							camera = { 0, 0, (float)SCREEN_WIDTH / SCREEN_SCALE, (float)SCREEN_HEIGHT / SCREEN_SCALE };
+							camVelX = 0;
+							camVelY = 0;
 						}
 						break;
 						// Switch between real layout and robots' knowledge of the layout
